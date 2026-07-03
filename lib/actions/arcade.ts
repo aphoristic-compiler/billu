@@ -25,50 +25,69 @@ export async function getArcadeData() {
   return { active: active ?? null, leaderboard }
 }
 
-export async function generateGame() {
-  const user = await requireDbUser()
-  const { GoogleGenerativeAI } = await import('@google/genai')
-  
-  const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' })
-  
-  const prompt = `Generate a simple HTML5/JavaScript game. Return ONLY valid HTML that can be embedded in an iframe. Include:
-- A complete game (snake, pong, flappy bird, breakout, or simple shooter)
-- Canvas-based graphics
-- Keyboard/mouse controls
-- Score tracking variable called "gameScore"
-- One function called "getScore()" that returns the current score
+function stripCodeFences(text: string) {
+  return text
+    .replace(/^```(?:html)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim()
+}
 
-Return ONLY the HTML/CSS/JS code, no markdown or explanations.`
-  
-  const response = await model.generateContent(prompt)
-  const htmlContent = response.response.text()
-  
-  // In a real scenario, save to DB and return
-  await logActivity(user.id, 'game_generated', `[CIPHER] new game protocol instantiated`)
-  
-  return {
-    id: `game_${Date.now()}`,
-    title: 'AI Generated Game',
-    description: 'A dynamically generated game from Gemini',
-    htmlContent,
+export async function generateGame(userPrompt: string) {
+  const user = await requireDbUser()
+  if (!userPrompt.trim()) throw new Error('Prompt required')
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set')
+
+  const { GoogleGenAI } = await import('@google/genai')
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+
+  const systemPrompt = `You are an arcade game generator. Generate a complete, playable HTML5 game based on this request: "${userPrompt}"
+
+STRICT REQUIREMENTS:
+- Return ONLY a complete self-contained HTML document (inline CSS + JS). No markdown, no explanations, no code fences.
+- Canvas-based, dark background (#0B0C10), neon green (#34C759) / red (#FF3B30) / gold (#FFD60A) accents, monospace font.
+- Keyboard controls (arrows/WASD/space). Also support click/tap where sensible.
+- Track an integer score. Show it on screen at all times.
+- On game over, show "GAME OVER — SCORE: <n>" and call:
+    window.parent.postMessage({ type: 'arcade_score', score: <n> }, '*')
+- Also post the score every time it changes:
+    window.parent.postMessage({ type: 'arcade_score_live', score: <n> }, '*')
+- Include a "restart" key (R).
+- Keep it under 400 lines. It must run with zero external resources.`
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: systemPrompt,
+  })
+
+  const html = stripCodeFences(response.text ?? '')
+  if (!html.toLowerCase().includes('<html') && !html.toLowerCase().includes('<canvas')) {
+    throw new Error('Model returned invalid game code')
   }
-}
 
-export async function getArcadeGames() {
-  // Return list of generated games (in real app, would fetch from DB)
-  return []
-}
+  // Deactivate previous games, activate the new one
+  await db
+    .update(activeArcadeGame)
+    .set({ isActive: false })
+    .where(eq(activeArcadeGame.isActive, true))
 
-export async function recordArcadeScore(gameId: string, score: number) {
-  const user = await requireDbUser()
-  await logActivity(user.id, 'arcade_score', `[BREACH] score ${score} recorded`)
+  const [game] = await db
+    .insert(activeArcadeGame)
+    .values({
+      prompt: userPrompt,
+      generatedCode: html,
+      generatedBy: user.id,
+      isActive: true,
+    })
+    .returning()
+
+  await logActivity(
+    user.id,
+    'game_generated',
+    `[CIPHER] new arcade protocol compiled by @${user.username}: "${userPrompt.slice(0, 60)}"`,
+  )
+
   revalidatePath('/hub/arcade')
-}
-
-export async function getArcadeLeaderboard() {
-  // Return top arcade scores
-  return []
+  return game
 }
 
 export async function submitScore(arcadeGameId: string, score: number, timePlayed: number) {

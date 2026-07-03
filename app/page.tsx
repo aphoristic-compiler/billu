@@ -1,7 +1,9 @@
-import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
+import { SaturoLogin } from '@/components/saturo-login'
 
-export default async function RootPage() {
-  const { userId } = await auth()
-  redirect(userId ? '/hub' : '/sign-in')
+export const metadata = {
+  title: 'The Saturo Login — Wing Hub',
+}
+
+export default function SignInPage() {
+  return <SaturoLogin />
 }

@@ -1,96 +1,168 @@
-import Link from 'next/link'
-import { desc } from 'drizzle-orm'
-import { db, quotes } from '@/lib/db'
-import { getDashboardStats, getUserStats } from '@/lib/actions/stats'
-import { QuoteTicker } from '@/components/quote-ticker'
+'use client';
 
-export default async function DashboardPage() {
-  const [stats, me, latestQuotes] = await Promise.all([
-    getDashboardStats(),
-    getUserStats(),
-    db.query.quotes.findMany({ orderBy: [desc(quotes.createdAt)], limit: 20 }),
-  ])
+import { useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { CldUploadWidget } from 'next-cloudinary';
+import { getVaultMedia, getQuotes, addQuote, deleteQuote } from '@/lib/actions/vault';
+import { toast } from '@/components/terminal-toast';
+import { CandlestickButton } from '@/components/candlestick-button';
+import Image from 'next/image';
 
-  const cards = [
-    { label: 'OPEN_POSITIONS', sub: 'events deployed', value: stats.events, href: '/hub/events' },
-    {
-      label: 'PENDING_MARGIN',
-      sub: 'unsettled exposure',
-      value: `₹${stats.pendingDebt.toLocaleString('en-IN')}`,
-      href: '/hub/ledger',
-    },
-    { label: 'MATCHES_EXEC', sub: 'games settled', value: stats.matches, href: '/hub/games' },
-    { label: 'COLD_STORAGE', sub: 'archived artifacts', value: stats.archives, href: '/hub/vault' },
-  ]
+export default function VaultPage() {
+  const { user } = useUser();
+  const [media, setMedia] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [quoteText, setQuoteText] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const [m, q] = await Promise.all([getVaultMedia(), getQuotes()]);
+      setMedia(m);
+      setQuotes(q);
+    };
+    load();
+  }, []);
+
+  if (!user) return null;
+
+  const handleUploadSuccess = async () => {
+    toast('UPLOAD_COMPLETE', 'success');
+    const m = await getVaultMedia();
+    setMedia(m);
+  };
+
+  const handleAddQuote = async () => {
+    if (!quoteText.trim()) return;
+    setLoadingQuote(true);
+    try {
+      await addQuote(quoteText);
+      toast('QUOTE_ADDED', 'success');
+      const q = await getQuotes();
+      setQuotes(q);
+      setQuoteText('');
+      setShowQuoteForm(false);
+    } catch (err) {
+      toast('QUOTE_FAILED', 'warning');
+    } finally {
+      setLoadingQuote(false);
+    }
+  };
+
+  const handleDeleteQuote = async (id: string) => {
+    try {
+      await deleteQuote(id);
+      toast('QUOTE_DELETED', 'success');
+      const q = await getQuotes();
+      setQuotes(q);
+    } catch (err) {
+      toast('DELETE_FAILED', 'warning');
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-mono text-2xl font-bold text-primary text-balance">
-          SATURO_WING // MAIN_TERMINAL
-        </h1>
-        <p className="mt-1 font-mono text-xs text-muted-foreground">
-          session: @{me.username} · win_rate: {me.winRate}% · net_position:{' '}
-          <span className={me.netDebt >= 0 ? 'text-primary' : 'text-destructive'}>
-            {me.netDebt >= 0 ? '+' : '-'}₹{Math.abs(me.netDebt).toLocaleString('en-IN')}
-          </span>
-        </p>
+    <div className="space-y-4 font-mono text-xs">
+      <div className="border border-accent/30 bg-background/50 p-4">
+        <h2 className="mb-3 text-accent">MEMORIAL_VAULT</h2>
+        <p className="text-secondary mb-3">Preserve memories and moments from the Saturo Wing</p>
+
+        <CldUploadWidget
+          uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ? `preset_${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}` : undefined}
+          onSuccess={handleUploadSuccess}
+        >
+          {({ open }) => (
+            <button
+              onClick={() => open()}
+              className="w-full border border-accent/30 bg-background px-3 py-2 text-secondary hover:border-accent hover:text-accent"
+            >
+              + UPLOAD_PHOTO
+            </button>
+          )}
+        </CldUploadWidget>
       </div>
 
-      <QuoteTicker quotes={latestQuotes.map((q) => `"${q.quote}" — ${q.attributedTo}`)} />
+      {media.length > 0 && (
+        <div className="border border-accent/30 bg-background/50 p-4">
+          <h3 className="mb-3 text-accent">MEDIA_GALLERY ({media.length})</h3>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 max-h-96 overflow-y-auto">
+            {media.map((item, i) => (
+              <div key={i} className="border border-accent/20 overflow-hidden aspect-square">
+                {item.type === 'image' ? (
+                  <Image
+                    src={item.url}
+                    alt="Vault memory"
+                    width={200}
+                    height={200}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <video
+                    src={item.url}
+                    className="w-full h-full object-cover"
+                    controls
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <section aria-label="Wing statistics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((c) => (
-          <Link
-            key={c.label}
-            href={c.href}
-            className="group rounded border border-border bg-card p-4 transition-colors hover:border-primary/60"
-          >
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              {c.label}
-            </p>
-            <p className="mt-2 font-mono text-3xl font-bold text-foreground group-hover:text-primary">
-              {c.value}
-            </p>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">{c.sub}</p>
-          </Link>
-        ))}
-      </section>
-
-      <section
-        aria-label="Personal record"
-        className="rounded border border-border bg-card p-4"
+      <button
+        onClick={() => setShowQuoteForm(!showQuoteForm)}
+        className="w-full border border-accent/30 bg-background/50 p-2 text-secondary hover:border-accent hover:text-accent"
       >
-        <h2 className="font-mono text-xs uppercase tracking-widest text-accent">
-          OPERATOR_PROFILE // {me.displayName}
-        </h2>
-        <dl className="mt-3 grid grid-cols-2 gap-4 font-mono text-sm sm:grid-cols-4">
-          <div>
-            <dt className="text-xs text-muted-foreground">events_created</dt>
-            <dd className="text-xl font-bold">{me.eventsCreated}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">matches_played</dt>
-            <dd className="text-xl font-bold">{me.matchesPlayed}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">wins / losses</dt>
-            <dd className="text-xl font-bold">
-              <span className="text-primary">{me.wins}</span>
-              {' / '}
-              <span className="text-destructive">{me.losses}</span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">win_rate</dt>
-            <dd className="text-xl font-bold text-accent">{me.winRate}%</dd>
-          </div>
-        </dl>
-      </section>
+        {showQuoteForm ? '[−] QUOTES_WALL' : '[+] QUOTES_WALL'} ({quotes.length})
+      </button>
 
-      <p className="font-mono text-[10px] text-muted-foreground/60">
-        {'>'} hint: press ~ to open the kernel shell. type `help` if you dare.
-      </p>
+      {showQuoteForm && (
+        <div className="border border-accent/30 bg-background/50 p-4 space-y-2">
+          <label className="block text-secondary">ADD_QUOTE</label>
+          <textarea
+            value={quoteText}
+            onChange={e => setQuoteText(e.target.value)}
+            className="w-full border border-accent/30 bg-background px-2 py-1 text-foreground placeholder-tertiary focus:border-accent focus:outline-none"
+            rows={2}
+            placeholder="Enter a memorable quote..."
+          />
+          <CandlestickButton
+            onClick={handleAddQuote}
+            isLoading={loadingQuote}
+            disabled={!quoteText.trim()}
+            className="w-full"
+          >
+            {loadingQuote ? 'ADDING...' : 'ADD_QUOTE'}
+          </CandlestickButton>
+        </div>
+      )}
+
+      {quotes.length > 0 && (
+        <div className="border border-accent/30 bg-background/50 p-4">
+          <h3 className="mb-2 text-accent">QUOTES_TICKER</h3>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {quotes.map((quote, i) => (
+              <div key={i} className="border-l-2 border-accent/30 pl-2 py-1">
+                <p className="text-accent italic">{`"${quote.text}"`}</p>
+                <div className="flex items-center justify-between text-tertiary">
+                  <span className="text-xs">{new Date(quote.createdAt).toLocaleDateString()}</span>
+                  {quote.userId === user.id && (
+                    <button
+                      onClick={() => handleDeleteQuote(quote.id)}
+                      className="text-secondary hover:text-warning"
+                    >
+                      [DEL]
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+
     </div>
-  )
+  );
 }

@@ -40,11 +40,15 @@ export async function logMatch(input: {
   )
 
   const allGames = await db.select().from(games)
-  const game = allGames.find((x) => x.id === input.gameId)
+  const game = allGames.find((x: { id: string }) => x.id === input.gameId)
   const allUsers = await db.select().from(users)
   const winners = input.participants
     .filter((p) => p.isWinner)
-    .map((p) => '@' + (allUsers.find((u) => u.id === p.userId)?.username ?? '?'))
+    .map(
+      (p) =>
+        '@' +
+        (allUsers.find((u: { id: string }) => u.id === p.userId)?.username ?? '?'),
+    )
 
   let pnlNote = ''
   if (game?.name === 'Poker') {
@@ -66,57 +70,6 @@ export async function logMatch(input: {
   revalidatePath('/hub')
   revalidatePath('/hub/games')
   return match
-}
-
-export async function recordMatch(input: {
-  game: 'tennis' | 'badminton' | 'football' | 'poker'
-  winners: string[]
-  losers: string[]
-  scoreWinner?: number
-  scoreLoser?: number
-  pokerBuyIn?: number
-  pokerPayout?: number
-  notes?: string
-}) {
-  const user = await requireDbUser()
-  
-  // For now, just log the activity
-  await logActivity(
-    user.id,
-    'match_recorded',
-    `[EXEC] ${input.game.toUpperCase()} match recorded`,
-  )
-  
-  revalidatePath('/hub')
-  revalidatePath('/hub/games')
-}
-
-export async function getMatches() {
-  return await db.query.matches.findMany({
-    orderBy: [desc(matches.playedAt)],
-    limit: 20,
-  })
-}
-
-export async function getLeaderboard() {
-  const allMatches = await db.query.matches.findMany({
-    with: { participants: true },
-  })
-  
-  // Simple win counting
-  const scoreMap: Record<string, { wins: number; losses: number; userId: string; pokerPnl?: number }> = {}
-  
-  allMatches.forEach((m) => {
-    m.participants.forEach((p) => {
-      if (!scoreMap[p.userId]) {
-        scoreMap[p.userId] = { wins: 0, losses: 0, userId: p.userId }
-      }
-      if (p.isWinner) scoreMap[p.userId].wins++
-      else scoreMap[p.userId].losses++
-    })
-  })
-  
-  return Object.values(scoreMap).sort((a, b) => b.wins - a.wins)
 }
 
 export async function getGamesData() {

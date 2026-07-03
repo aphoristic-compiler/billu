@@ -6,11 +6,23 @@ import { toast } from '@/components/terminal-toast'
 
 export function CandlestickButton({
   label,
+  children,
   onSuccess,
+  onClick,
+  type = 'button',
+  disabled = false,
+  isLoading = false,
+  loading = false,
   className = '',
 }: {
-  label: string
-  onSuccess: () => void
+  label?: string
+  children?: React.ReactNode
+  onSuccess?: () => void
+  onClick?: () => void
+  type?: 'button' | 'submit'
+  disabled?: boolean
+  isLoading?: boolean
+  loading?: boolean
   className?: string
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -18,6 +30,7 @@ export function CandlestickButton({
   const [isGreen, setIsGreen] = useState(true)
   const rejectionsRef = useRef(0)
   const [mercy, setMercy] = useState(false)
+  const busy = isLoading || loading
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -37,7 +50,6 @@ export function CandlestickButton({
 
     function draw() {
       ctx!.clearRect(0, 0, W, H)
-      // midline
       ctx!.strokeStyle = '#3A3F47'
       ctx!.beginPath()
       ctx!.moveTo(0, H / 2)
@@ -62,7 +74,6 @@ export function CandlestickButton({
     draw()
 
     const interval = setInterval(() => {
-      // shift candles, push a new one
       candles.shift()
       const prev = candles[candles.length - 1]
       const open = prev.close
@@ -77,27 +88,43 @@ export function CandlestickButton({
     return () => clearInterval(interval)
   }, [])
 
-  const handleClick = useCallback(() => {
-    if (isGreenRef.current || mercy || rejectionsRef.current >= 3) {
-      onSuccess()
-      return
-    }
-    rejectionsRef.current += 1
-    gsap.to(document.body, { x: '+=5', yoyo: true, repeat: 5, duration: 0.05, clearProps: 'x' })
-    toast('STOP-LOSS HIT. TRY AGAIN.', 'loss')
-    if (rejectionsRef.current >= 3) {
-      setMercy(true)
-      toast('MERCY RULE ACTIVATED. POSITION FORCED GREEN.', 'profit')
-    }
-  }, [mercy, onSuccess])
+  const fire = useCallback(() => {
+    if (onSuccess) onSuccess()
+    if (onClick) onClick()
+  }, [onSuccess, onClick])
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (busy || disabled) {
+        e.preventDefault()
+        return
+      }
+      if (isGreenRef.current || mercy || rejectionsRef.current >= 3) {
+        // Market is green: allow. For type=submit, let the native submit happen.
+        if (type !== 'submit') fire()
+        return
+      }
+      // Market is red: reject (block submit too)
+      e.preventDefault()
+      rejectionsRef.current += 1
+      gsap.to(document.body, { x: '+=5', yoyo: true, repeat: 5, duration: 0.05, clearProps: 'x' })
+      toast('STOP-LOSS HIT. TRY AGAIN.', 'loss')
+      if (rejectionsRef.current >= 3) {
+        setMercy(true)
+        toast('MERCY RULE ACTIVATED. POSITION FORCED GREEN.', 'profit')
+      }
+    },
+    [busy, disabled, mercy, type, fire],
+  )
 
   const effectiveGreen = isGreen || mercy
 
   return (
     <button
-      type="button"
+      type={type}
       onClick={handleClick}
-      className={`group flex items-center gap-3 border px-4 py-2 font-mono text-sm transition-colors ${
+      disabled={disabled || busy}
+      className={`group flex items-center justify-center gap-3 border px-4 py-2 font-mono text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
         effectiveGreen
           ? 'border-profit text-profit hover:bg-profit/10'
           : 'border-loss text-loss hover:bg-loss/10'
@@ -105,7 +132,7 @@ export function CandlestickButton({
     >
       <canvas ref={canvasRef} width={120} height={40} aria-hidden="true" />
       <span className="whitespace-nowrap">
-        {label}
+        {busy ? 'EXECUTING...' : (label ?? children)}
         <span className="ml-2 text-xs opacity-70">
           {effectiveGreen ? '[MARKET: GREEN]' : '[MARKET: RED]'}
         </span>

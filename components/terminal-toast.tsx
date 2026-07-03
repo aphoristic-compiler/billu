@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
+type ToastVariant = 'success' | 'warning' | 'info' | 'error' | 'profit' | 'loss'
+
 type Toast = {
   id: number
   message: string
@@ -12,8 +14,14 @@ type Listener = (t: Toast) => void
 let listeners: Listener[] = []
 let nextId = 1
 
-export function toast(message: string, variant: Toast['variant'] = 'info') {
-  const t = { id: nextId++, message, variant }
+function normalizeVariant(v: ToastVariant): Toast['variant'] {
+  if (v === 'profit' || v === 'success') return 'success'
+  if (v === 'loss' || v === 'error' || v === 'warning') return 'warning'
+  return 'info'
+}
+
+export function toast(message: string, variant: ToastVariant = 'info') {
+  const t = { id: nextId++, message, variant: normalizeVariant(variant) }
   listeners.forEach((l) => l(t))
 }
 

@@ -10,7 +10,7 @@ import {
   votePoll,
 } from '@/lib/actions/events'
 import { CandlestickButton } from '@/components/candlestick-button'
-import { TerminalToast } from '@/components/terminal-toast'
+import { toast as terminalToast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
 
 // ─── Types (serialized from server) ───
