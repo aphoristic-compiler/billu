@@ -2,9 +2,14 @@ import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { clerkClient } from '@clerk/nextjs/server'
+import { getCurrentDbUser } from '@/lib/auth'
 
 export async function GET() {
   try {
+    const user = await getCurrentDbUser()
+    if (!user || user.username !== 'aaryn') {
+      return new NextResponse('Unauthorized - Only Aaryn can access this route', { status: 401 })
+    }
     // 1. Delete all Clerk users
     const client = await clerkClient()
     const clerkUsers = await client.users.getUserList()

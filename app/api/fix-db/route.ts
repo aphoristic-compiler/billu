@@ -1,9 +1,14 @@
 import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { getCurrentDbUser } from '@/lib/auth'
 
 export async function GET() {
   try {
+    const user = await getCurrentDbUser()
+    if (!user || user.username !== 'aaryn') {
+      return new NextResponse('Unauthorized - Only Aaryn can access this route', { status: 401 })
+    }
     // Attempt to manually apply the missing columns in production
     await db.execute(sql`
       ALTER TABLE "events" ADD COLUMN IF NOT EXISTS "is_archived" boolean DEFAULT false NOT NULL;
