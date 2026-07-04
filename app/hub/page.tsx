@@ -1,13 +1,16 @@
 import { getDashboardData } from '@/lib/actions/dashboard'
 import { getDailyBanner } from '@/lib/actions/banner'
+import { getMembers } from '@/lib/actions/events'
+import { EventCard } from '@/components/events/events-board'
 import Link from 'next/link'
 import { Activity, Gamepad2, Landmark, Wallet, Vault } from 'lucide-react'
 import { BannerTicker } from '@/components/banner-ticker'
 
 export default async function HubDashboard() {
-  const [data, bannerText] = await Promise.all([
+  const [data, bannerText, members] = await Promise.all([
     getDashboardData(),
     getDailyBanner(),
+    getMembers(),
   ])
 
   return (
@@ -27,6 +30,20 @@ export default async function HubDashboard() {
           Saturo Wing Central Dashboard. Monitor your positions, track capital exposure, and deploy assets into the vault.
         </p>
       </section>
+
+      {/* Watchlist Section */}
+      {data.pinnedEvents && data.pinnedEvents.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="font-mono text-lg font-bold text-warning border-b border-warning/50 pb-2">
+            WATCHLIST_ASSETS
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data.pinnedEvents.map(event => (
+              <EventCard key={event.id} event={event as any} members={members as any} currentUserId={data.user.id} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         

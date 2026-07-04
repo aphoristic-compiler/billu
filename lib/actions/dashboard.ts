@@ -1,7 +1,7 @@
 'use server'
 
-import { db, activityLog, debts, expenses, users } from '@/lib/db'
-import { eq, or, desc } from 'drizzle-orm'
+import { db, activityLog, debts, expenses, users, events } from '@/lib/db'
+import { eq, or, desc, sql } from 'drizzle-orm'
 import { requireDbUser } from '@/lib/auth'
 
 export async function getDashboardData() {
@@ -41,11 +41,73 @@ export async function getDashboardData() {
     }
   })
 
+  // Ensure is_pinned column exists
+  try {
+    await db.execute(sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_pinned boolean NOT NULL DEFAULT false;`)
+  } catch (e) {
+    // Ignore if it fails due to dialect differences, though Postgres handles this fine
+  }
+
+  // Fetch pinned events (fully hydrated)
+  const pinnedTopLevel = await db.query.events.findMany({
+    where: (e) => eq(e.isPinned, true),
+    orderBy: [desc(events.createdAt)],
+    limit: 3,
+    with: {
+      creator: true,
+      rsvps: { with: { user: true } },
+      expenses: { with: { payer: true, splits: { with: { user: true } } } },
+      polls: {
+        with: {
+          options: { with: { votes: { with: { user: true } } } },
+        },
+      },
+    },
+  })
+
+  // Safely map to avoid Drizzle circular references
+  const pinnedEvents = pinnedTopLevel.map((e) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    category: e.category,
+    location: e.location,
+    locationCustom: e.locationCustom,
+    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+    isLive: e.isLive,
+    isPinned: e.isPinned,
+    whatsappBlasted: e.whatsappBlasted,
+    createdBy: e.createdBy,
+    creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
+    rsvps: (e.rsvps || []).map((r) => ({
+      id: r.id,
+      status: r.status,
+      userId: r.userId,
+      user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
+    })),
+    microEvents: [], // Don't need microevents for the dashboard widget
+    polls: (e.polls || []).map((p) => ({
+      id: p.id,
+      question: p.question,
+      options: (p.options || []).map((o) => ({
+        id: o.id,
+        label: o.label,
+        votes: (o.votes || []).map((v) => ({
+          id: v.id,
+          userId: v.userId,
+          user: v.user ? { id: v.user.id, username: v.user.username, displayName: v.user.displayName } : null
+        }))
+      }))
+    })),
+    expenses: e.expenses || [],
+  }))
+
   return {
     recentActivity,
     netBalance,
     totalOwedToUser,
     totalUserOwes,
-    user
+    user,
+    pinnedEvents,
   }
 }

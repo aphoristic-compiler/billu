@@ -211,6 +211,7 @@ export async function getEventsWithDetails() {
     locationCustom: e.locationCustom,
     startsAt: e.startsAt ? e.startsAt.toISOString() : null,
     isLive: e.isLive,
+    isPinned: e.isPinned,
     whatsappBlasted: e.whatsappBlasted,
     createdBy: e.createdBy,
     creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
@@ -282,6 +283,7 @@ export async function getTripDesk(eventId: string) {
     locationCustom: e.locationCustom,
     startsAt: e.startsAt ? e.startsAt.toISOString() : null,
     isLive: e.isLive,
+    isPinned: e.isPinned,
     whatsappBlasted: e.whatsappBlasted,
     createdBy: e.createdBy,
     creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
@@ -354,6 +356,25 @@ export async function archiveEvent(eventId: string) {
   await db.update(events).set({ isArchived: true }).where(eq(events.parentEventId, eventId))
   
   await logActivity(user.id, 'event_archived', `[VAULT] ${tickerize(event.title)} vaulted by @${user.username}`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/events')
+}
+
+export async function toggleEventPin(eventId: string) {
+  const user = await requireDbUser()
+  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+  if (!event) return
+
+  if (!event.isPinned) {
+    const pinnedEvents = await db.select().from(events).where(eq(events.isPinned, true))
+    if (pinnedEvents.length >= 3) {
+      throw new Error('Maximum of 3 positions can be pinned to the watchlist at a time.')
+    }
+  }
+
+  await db.update(events).set({ isPinned: !event.isPinned }).where(eq(events.id, eventId))
+  
+  await logActivity(user.id, 'event_updated', `[WATCHLIST] ${tickerize(event.title)} ${!event.isPinned ? 'added to' : 'removed from'} watchlist by @${user.username}`)
   revalidatePath('/hub')
   revalidatePath('/hub/events')
 }

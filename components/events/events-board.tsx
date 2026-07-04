@@ -14,6 +14,7 @@ import {
   addMicroEvent,
   archiveEvent,
   updateEvent,
+  toggleEventPin,
 } from '@/lib/actions/events'
 import { addExpense, deleteExpense } from '@/lib/actions/expenses'
 import { saveVaultMedia } from '@/lib/actions/vault'
@@ -65,6 +66,7 @@ interface WingEvent {
   }[]
   polls: Poll[]
   expenses: any[]
+  isPinned?: boolean
 }
 
 const LOCATION_LABELS: Record<string, string> = {
@@ -437,6 +439,23 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
         </div>
         {event.createdBy === currentUserId && (
           <div className="flex shrink-0 flex-col gap-1 items-end">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    await toggleEventPin(event.id)
+                    terminalToast(event.isPinned ? 'Position removed from watchlist.' : 'Position added to watchlist.')
+                  } catch (e: any) {
+                    terminalToast(e.message, 'error')
+                  }
+                })
+              }}
+              className="font-mono text-xs text-muted-foreground hover:text-warning"
+            >
+              {event.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
+            </button>
             <button
               type="button"
               disabled={pending}
