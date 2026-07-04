@@ -85,7 +85,6 @@ export const events = pgTable("events", {
   endsAt: timestamp("ends_at"),
   isLive: boolean("is_live").notNull().default(false),
   whatsappBlasted: boolean("whatsapp_blasted").notNull().default(false),
-  notes: text("notes"),
   isArchived: boolean("is_archived").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

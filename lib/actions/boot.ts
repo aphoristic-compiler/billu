@@ -47,7 +47,7 @@ export async function addLore(memberName: string, text: string) {
   await db.insert(systemLeaks).values({
     memberName: memberName,
     body: text,
-    category: 'intel',
+    category: 'member',
     title: 'User Submitted Intel',
     rarity: 'common'
   })
