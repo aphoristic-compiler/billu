@@ -163,7 +163,50 @@ export async function getEventsWithDetails() {
       },
     },
   })
-  return topLevel
+  
+  // Safely map to avoid Drizzle circular references crashing Server Components
+  const safeEvents = topLevel.map((e) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    category: e.category,
+    location: e.location,
+    locationCustom: e.locationCustom,
+    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+    isLive: e.isLive,
+    whatsappBlasted: e.whatsappBlasted,
+    createdBy: e.createdBy,
+    creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
+    rsvps: (e.rsvps || []).map((r) => ({
+      id: r.id,
+      status: r.status,
+      userId: r.userId,
+      user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
+    })),
+    microEvents: (e.microEvents || []).map((m) => ({
+      id: m.id,
+      title: m.title,
+      location: m.location,
+      locationCustom: m.locationCustom,
+      expenses: m.expenses || [],
+    })),
+    polls: (e.polls || []).map((p) => ({
+      id: p.id,
+      question: p.question,
+      options: (p.options || []).map((o) => ({
+        id: o.id,
+        label: o.label,
+        votes: (o.votes || []).map((v) => ({
+          id: v.id,
+          userId: v.userId,
+          user: v.user ? { id: v.user.id, username: v.user.username, displayName: v.user.displayName } : null
+        }))
+      }))
+    })),
+    expenses: e.expenses || [],
+  }))
+  
+  return safeEvents as any
 }
 
 export async function getMembers() {
@@ -205,34 +248,57 @@ export async function archiveEvent(eventId: string) {
 
 export async function getArchivedEvents() {
   await requireDbUser()
-  return await db.query.events.findMany({
+  const topLevel = await db.query.events.findMany({
     where: and(eq(events.isArchived, true), isNull(events.parentEventId)),
     orderBy: [desc(events.createdAt)],
     with: {
       creator: true,
-      rsvps: {
-        with: { user: true }
-      },
-      expenses: {
-        with: { splits: true, payer: true }
+      rsvps: { with: { user: true } },
+      expenses: { with: { payer: true, splits: { with: { user: true } } } },
+      microEvents: {
+        with: { expenses: { with: { payer: true, splits: { with: { user: true } } } } }
       },
       vaultMedia: {
         with: { uploader: true }
       },
-      microEvents: {
-        with: {
-          creator: true,
-          rsvps: {
-            with: { user: true }
-          },
-          expenses: {
-            with: { splits: true, payer: true }
-          },
-          vaultMedia: {
-            with: { uploader: true }
-          },
-        }
-      }
-    }
+    },
   })
+
+  // Safe mapping for vault
+  const safeEvents = topLevel.map((e) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    category: e.category,
+    location: e.location,
+    locationCustom: e.locationCustom,
+    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+    isLive: e.isLive,
+    whatsappBlasted: e.whatsappBlasted,
+    createdBy: e.createdBy,
+    creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
+    rsvps: (e.rsvps || []).map((r) => ({
+      id: r.id,
+      status: r.status,
+      userId: r.userId,
+      user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
+    })),
+    microEvents: (e.microEvents || []).map((m) => ({
+      id: m.id,
+      title: m.title,
+      location: m.location,
+      locationCustom: m.locationCustom,
+      expenses: m.expenses || [],
+    })),
+    expenses: e.expenses || [],
+    vaultMedia: (e.vaultMedia || []).map((v) => ({
+      id: v.id,
+      cloudinaryUrl: v.cloudinaryUrl,
+      mediaType: v.mediaType,
+      caption: v.caption,
+      uploader: v.uploader ? { id: v.uploader.id, username: v.uploader.username, displayName: v.uploader.displayName } : null
+    }))
+  }))
+
+  return safeEvents as any
 }

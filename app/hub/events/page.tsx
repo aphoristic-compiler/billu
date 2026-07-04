@@ -20,8 +20,8 @@ export default async function EventsPage() {
         </p>
       </div>
       <EventsBoard
-        events={JSON.parse(JSON.stringify(events))}
-        members={JSON.parse(JSON.stringify(members))}
+        events={events}
+        members={members}
         currentUserId={me?.id ?? ''}
       />
     </div>

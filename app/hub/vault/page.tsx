@@ -97,34 +97,62 @@ export default function VaultPage() {
                 const totalCost = evt.expenses?.reduce((sum: number, exp: any) => sum + exp.totalAmount, 0) || 0;
                 
                 return (
-                  <div key={evt.id || i} className={`border-l-2 ${isMicro ? 'border-accent/10 ml-4 mt-3' : 'border-accent/20'} pl-3 mb-2`}>
-                    <p className="font-bold text-secondary text-sm">{evt.title}</p>
+                  <div key={evt.id || i} className={`border-l-2 ${isMicro ? 'border-accent/10 ml-4 mt-3' : 'border-accent/20'} pl-3 mb-2 pb-2`}>
+                    <p className="font-bold text-secondary text-sm">{evt.title} <span className="text-xs text-muted-foreground ml-2">({evt.category})</span></p>
                     <p className="text-tertiary">
-                      {new Date(evt.createdAt).toLocaleDateString()} · @{evt.creator?.username || 'unknown'}
+                      {evt.startsAt ? new Date(evt.startsAt).toLocaleDateString() : 'Unknown date'} · @{evt.creator?.username || 'unknown'}
                     </p>
                     
-                    {evt.location && <p className="text-tertiary mt-1">Loc: {evt.location}</p>}
-                    {evt.notes && <p className="text-tertiary mt-1 italic">"{evt.notes}"</p>}
+                    {evt.location && <p className="text-tertiary mt-1">📍 {evt.location}</p>}
+                    {evt.description && <p className="text-tertiary mt-1 italic">"{evt.description}"</p>}
                     
                     <div className="flex gap-4 mt-2 text-xs">
-                      <span className="text-profit">{inCount} IN</span>
-                      <span className="text-loss">{outCount} OUT</span>
-                      {totalCost > 0 && <span className="text-warning">Cost: ₹{totalCost.toLocaleString('en-IN')}</span>}
-                      {evt.vaultMedia?.length > 0 && <span className="text-accent">{evt.vaultMedia.length} Media</span>}
+                      {totalCost > 0 && <span className="text-warning">Total Cost: ₹{totalCost.toLocaleString('en-IN')}</span>}
                     </div>
 
                     {evt.rsvps && evt.rsvps.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-mono">
-                        {evt.rsvps.map((r: any) => (
-                          <span key={r.id} className={r.status === 'long' ? 'text-profit' : r.status === 'short' ? 'text-loss' : 'text-tertiary'}>
-                            @{r.user?.username}
-                          </span>
+                      <div className="mt-2 text-xs font-mono space-y-1">
+                        <div className="text-profit">IN: {evt.rsvps.filter((r: any) => r.status === 'long').map((r: any) => `@${r.user?.username}`).join(', ') || 'None'}</div>
+                        <div className="text-loss">OUT: {evt.rsvps.filter((r: any) => r.status === 'short').map((r: any) => `@${r.user?.username}`).join(', ') || 'None'}</div>
+                      </div>
+                    )}
+
+                    {evt.expenses && evt.expenses.length > 0 && (
+                      <div className="mt-2 p-2 border border-accent/20 bg-background/30 rounded">
+                        <p className="text-[10px] uppercase text-muted-foreground mb-1 tracking-widest">expenses</p>
+                        {evt.expenses.map((exp: any) => (
+                          <div key={exp.id} className="text-xs flex justify-between">
+                            <span>{exp.title}</span>
+                            <span className="text-warning">₹{exp.amount} (paid by @{exp.payer?.username})</span>
+                          </div>
                         ))}
                       </div>
                     )}
 
+                    {evt.vaultMedia && evt.vaultMedia.length > 0 && (
+                      <div className="mt-2 p-2 border border-accent/20 bg-background/30 rounded">
+                        <p className="text-[10px] uppercase text-muted-foreground mb-1 tracking-widest">media</p>
+                        <div className="flex gap-2 overflow-x-auto">
+                          {evt.vaultMedia.map((media: any) => (
+                            <div key={media.id} className="h-16 w-16 shrink-0 border border-accent/30 overflow-hidden relative group">
+                              {media.mediaType === 'image' ? (
+                                <Image src={media.cloudinaryUrl} alt="media" fill className="object-cover" />
+                              ) : (
+                                <video src={media.cloudinaryUrl} className="w-full h-full object-cover" />
+                              )}
+                              {media.caption && (
+                                <div className="absolute inset-0 bg-black/80 hidden group-hover:flex items-center justify-center text-[8px] p-1 text-center">
+                                  {media.caption}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {evt.microEvents && evt.microEvents.length > 0 && (
-                      <div className="mt-3">
+                      <div className="mt-3 border-t border-accent/10 pt-2">
                         <p className="text-[10px] uppercase text-muted-foreground mb-1 tracking-widest">nested_events</p>
                         {evt.microEvents.map((me: any) => renderEvent(me, true))}
                       </div>
