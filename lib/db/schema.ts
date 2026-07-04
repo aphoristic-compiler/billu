@@ -384,8 +384,8 @@ export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
 }))
 
 export const debtsRelations = relations(debts, ({ one }) => ({
-  debtor: one(users, { fields: [debts.fromUser], references: [users.id] }),
-  creditor: one(users, { fields: [debts.toUser], references: [users.id] }),
+  debtor: one(users, { fields: [debts.fromUser], references: [users.id], relationName: "debtor" }),
+  creditor: one(users, { fields: [debts.toUser], references: [users.id], relationName: "creditor" }),
 }))
 
 export const quotesRelations = relations(quotes, ({ one }) => ({
