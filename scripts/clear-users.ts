@@ -1,23 +1,18 @@
-import { neon } from "@neondatabase/serverless"
-import { drizzle } from "drizzle-orm/neon-http"
-import "dotenv/config"
-import * as schema from "../lib/db/schema"
+import { config } from "dotenv";
+config({ path: ".env.local" });
+import postgres from "postgres";
 
-const sql = neon(process.env.DATABASE_URL!)
-const db = drizzle(sql, { schema })
+const sql = postgres(process.env.DATABASE_URL!);
 
 async function main() {
-  console.log("Removing pre-seeded users...")
-  // We don't delete clerkId users (actual logged in users)
-  // Only the pre-seeded ones which have clerkId as NULL
-  
-  await db.delete(schema.users).where(
-    schema.users.clerkId === null // wait, eq is better but we are importing schema
-  ) // Wait, let's use sql directly
-  
-  await sql`DELETE FROM users WHERE clerk_id IS NULL`;
-  
-  console.log("Pre-seeded users removed.");
+  console.log("Adding is_archived column to events...");
+  try {
+    await sql`ALTER TABLE "events" ADD COLUMN "is_archived" boolean DEFAULT false NOT NULL`;
+    console.log("Successfully added is_archived to events!");
+  } catch(e) {
+    console.log("It might already exist:", e);
+  }
+  process.exit(0);
 }
 
 main().catch(console.error);

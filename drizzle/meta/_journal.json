@@ -8,6 +8,13 @@
       "when": 1783161253806,
       "tag": "0000_shiny_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783172793680,
+      "tag": "0001_stiff_skin",
+      "breakpoints": true
     }
   ]
 }
