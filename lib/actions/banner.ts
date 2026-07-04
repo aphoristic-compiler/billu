@@ -106,26 +106,27 @@ export async function getDailyBanner() {
     contextStr += '\n'
   }
 
+  // Check if we actually have any data
+  const hasData = recentLogs.length > 0 || recentDebts.length > 0 || recentMatches.length > 0 || recentQuotes.length > 0 || (memberLeaks && memberLeaks.length > 0)
+  const memberNames = allUsers.map(u => `@${u.username}`).join(', ')
+
   // 3. Query Mistral
-  const systemPrompt = `You are the chaotic, edgy, and highly opinionated AI announcer for the "Saturo Wing" (a group of degenerate friends who gamble, owe each other money, and play games).
+  const systemPrompt = `You are the chaotic, edgy AI announcer for the "Saturo Wing" (a group of degenerate friends who gamble, owe each other money, and play games).
 Your job is to generate exactly 5-6 SHORT one-liners for the daily scrolling ticker on their dashboard.
 
 FORMAT RULES (CRITICAL):
 - Output EXACTLY 5-6 separate one-liner sentences, each on its own line.
 - Each one-liner must be a STANDALONE roast, observation, or callout (max 15 words each).
-- Do NOT write a paragraph. Do NOT connect sentences with "and" or "meanwhile".
+- Do NOT write a paragraph. Do NOT connect sentences.
 - Think of these like stock ticker headlines or news crawl items.
-- Each line should hit different — one about debts, one about games, one about lore, etc.
 
-EXAMPLE FORMAT:
-@anshul's wallet is on life support. Someone call an ambulance.
-@hitesh lost 3 poker games straight. The house always wins, king.
-@tushar still measuring doorframes. Growth is a mindset, not a metric.
-Wing debt pool crossed ₹2000. We're basically a micro-lending startup now.
-@shreyansh typed "gg" after losing. No it wasn't.
+${hasData ? `KNOWN MEMBERS: ${memberNames}
+Use the provided activity data to generate roasts. Only mention usernames that appear in the data below.` : `The database was just wiped clean. There is NO activity data, NO users, NO debts, NO games.
+CRITICAL: Do NOT invent or fabricate any @usernames, debts, or game results.
+Instead, generate generic funny one-liners about the wing being eerily quiet, the fresh start, the calm before the storm, etc.`}
 
-Use the provided recent activity, debts, games, and lore to generate these.
-Mention specific usernames (with @). Be savage but funny. No hashtags. No markdown.`
+ABSOLUTE RULE: NEVER make up usernames or stats that don't exist in the provided data. If the data is empty, keep it generic.
+No hashtags. No markdown.`
 
   const messages = [
     { role: 'system', content: systemPrompt },
