@@ -1,6 +1,6 @@
 'use server'
 
-import { db, dailyBanners, activityLog, debts, matches, quotes, users, systemLeaks } from '@/lib/db'
+import { db, dailyBanners, activityLog, debts, matches, quotes, users, systemLeaks, events } from '@/lib/db'
 import { eq, desc, sql } from 'drizzle-orm'
 import { requireDbUser } from '@/lib/auth'
 import { queryMistral } from '@/lib/mistral'
@@ -29,7 +29,7 @@ export async function getDailyBanner() {
   }
 
   // 2. We need to generate a new banner. Gather context.
-  const [recentLogs, recentDebts, recentMatches, recentQuotes, memberLeaks, allUsers] = await Promise.all([
+  const [recentLogs, recentDebts, recentMatches, recentQuotes, memberLeaks, recentEvents, allUsers] = await Promise.all([
     db.query.activityLog.findMany({
       orderBy: [desc(activityLog.createdAt)],
       limit: 10,
@@ -50,6 +50,11 @@ export async function getDailyBanner() {
     db.query.systemLeaks.findMany({
       where: eq(systemLeaks.category, 'member'),
       limit: 10,
+    }),
+    db.query.events.findMany({
+      where: eq(events.isArchived, false),
+      orderBy: [desc(events.createdAt)],
+      limit: 3,
     }),
     db.query.users.findMany(),
   ])
@@ -106,8 +111,17 @@ export async function getDailyBanner() {
     contextStr += '\n'
   }
 
+  if (recentEvents && recentEvents.length > 0) {
+    contextStr += 'ONGOING / UPCOMING EVENTS:\n'
+    recentEvents.forEach((ev) => {
+      const u = allUsers.find((u) => u.id === ev.createdBy)
+      contextStr += `- Event "${ev.title}" at ${ev.location} (Category: ${ev.category}), created by @${u?.username || 'someone'}\n`
+    })
+    contextStr += '\n'
+  }
+
   // Check if we actually have any data
-  const hasData = recentLogs.length > 0 || recentDebts.length > 0 || recentMatches.length > 0 || recentQuotes.length > 0 || (memberLeaks && memberLeaks.length > 0)
+  const hasData = recentLogs.length > 0 || recentDebts.length > 0 || recentMatches.length > 0 || recentQuotes.length > 0 || (memberLeaks && memberLeaks.length > 0) || (recentEvents && recentEvents.length > 0)
   const memberNames = allUsers.map(u => `@${u.username}`).join(', ')
 
   // 3. Query Mistral
