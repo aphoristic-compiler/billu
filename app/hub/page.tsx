@@ -2,6 +2,7 @@ import { getDashboardData } from '@/lib/actions/dashboard'
 import { getDailyBanner } from '@/lib/actions/banner'
 import Link from 'next/link'
 import { Activity, Gamepad2, Landmark, Wallet, Vault } from 'lucide-react'
+import { BannerTicker } from '@/components/banner-ticker'
 
 export default async function HubDashboard() {
   const [data, bannerText] = await Promise.all([
@@ -11,12 +12,8 @@ export default async function HubDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Daily AI Banner */}
-      <div className="w-full bg-accent/10 border-b border-accent/20 p-3 text-center">
-        <p className="font-mono text-xs md:text-sm text-accent max-w-4xl mx-auto italic">
-          "{bannerText}"
-        </p>
-      </div>
+      {/* Daily AI Banner — scrolling ticker */}
+      <BannerTicker text={bannerText} />
 
       {/* Welcome Section */}
       <section className="border border-border bg-card/50 p-6 rounded-lg relative overflow-hidden">
