@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { AddExpenseForm } from './add-expense-form'
+import { InlineConfirmButton } from '@/components/inline-confirm-button'
 import {
   createEvent,
   deleteEvent,
@@ -16,7 +18,6 @@ import {
 import { addExpense, deleteExpense } from '@/lib/actions/expenses'
 import { saveVaultMedia } from '@/lib/actions/vault'
 import { CldUploadWidget } from 'next-cloudinary'
-import { CandlestickButton } from '@/components/candlestick-button'
 import { toast as terminalToast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
 
@@ -355,10 +356,9 @@ function ExpenseList({ expenses, currentUserId }: { expenses: any[]; currentUser
             <span className="text-loss font-bold">₹{ex.totalAmount.toLocaleString('en-IN')}</span>
           </span>
           {ex.paidBy === currentUserId && (
-            <button
+            <InlineConfirmButton
               disabled={pending}
               onClick={() => {
-                if (!confirm('Void this expense?')) return
                 startTransition(async () => {
                   try {
                     await deleteExpense(ex.id)
@@ -368,10 +368,11 @@ function ExpenseList({ expenses, currentUserId }: { expenses: any[]; currentUser
                   }
                 })
               }}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              [del]
-            </button>
+              idleLabel="[del]"
+              confirmLabel="[CONFIRM_VOID?]"
+              idleClassName="text-muted-foreground hover:text-destructive"
+              confirmClassName="text-destructive font-bold"
+            />
           )}
         </li>
       ))}
@@ -380,7 +381,7 @@ function ExpenseList({ expenses, currentUserId }: { expenses: any[]; currentUser
 }
 
 // ─── Event card ───
-function EventCard({ event, members, currentUserId }: { event: WingEvent; members: Member[]; currentUserId: string }) {
+export function EventCard({ event, members, currentUserId, isTripDesk = false }: { event: WingEvent; members: Member[]; currentUserId: string; isTripDesk?: boolean }) {
   const [pending, startTransition] = useTransition()
   const [editing, setEditing] = useState(false)
   const isLive =
@@ -444,35 +445,32 @@ function EventCard({ event, members, currentUserId }: { event: WingEvent; member
             >
               [edit]
             </button>
-            <button
-              type="button"
+            <InlineConfirmButton
               disabled={pending}
               onClick={() => {
-                if (!confirm('Liquidate this position? This cannot be undone.')) return
                 startTransition(async () => {
                   await deleteEvent(event.id)
                   terminalToast('Position liquidated.', 'error')
                 })
               }}
-              className="font-mono text-xs text-muted-foreground hover:text-destructive"
-              aria-label={`Delete event ${event.title}`}
-            >
-              [liquidate]
-            </button>
-            <button
-              type="button"
+              idleLabel="[liquidate]"
+              confirmLabel="[CONFIRM_LIQUIDATION?]"
+              idleClassName="font-mono text-xs text-muted-foreground hover:text-destructive"
+              confirmClassName="text-destructive font-bold"
+            />
+            <InlineConfirmButton
               disabled={pending}
               onClick={() => {
-                if (!confirm('Liquidate and Vault this position?')) return
                 startTransition(async () => {
                   await archiveEvent(event.id)
                   terminalToast('Position vaulted.', 'success')
                 })
               }}
-              className="font-mono text-xs text-muted-foreground hover:text-profit"
-            >
-              [liquidate & vault]
-            </button>
+              idleLabel="[liquidate & vault]"
+              confirmLabel="[CONFIRM_VAULT?]"
+              idleClassName="font-mono text-xs text-muted-foreground hover:text-profit"
+              confirmClassName="text-profit font-bold"
+            />
           </div>
         )}
       </div>
@@ -549,40 +547,26 @@ function EventCard({ event, members, currentUserId }: { event: WingEvent; member
           </div>
           <div className="mt-4 flex items-center justify-end gap-3">
             <button type="button" onClick={() => setEditing(false)} className="font-mono text-xs text-muted-foreground hover:text-foreground">abort</button>
-            <CandlestickButton type="submit" loading={pending}>SAVE_CHANGES</CandlestickButton>
+            <button type="submit" disabled={pending} className="rounded bg-primary px-3 py-1 font-mono text-xs text-primary-foreground disabled:opacity-50">
+              {pending ? 'SAVING...' : 'SAVE_CHANGES'}
+            </button>
           </div>
         </form>
       )}
 
-      {event.microEvents.length > 0 && (
-        <div className="mt-3 border-l-2 border-primary/40 pl-3">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            sub_positions
-          </p>
-          <ul className="mt-1 flex flex-col gap-1">
-            {event.microEvents.map((m) => (
-              <li key={m.id} className="font-mono text-xs text-foreground/80">
-                └─ {m.title}{' '}
-                <span className="text-muted-foreground">
-                  ({m.location === 'other' ? m.locationCustom : LOCATION_LABELS[m.location]})
-                </span>
-                <details className="mt-1 group">
-                  <summary className="cursor-pointer font-mono text-[10px] text-accent hover:text-accent/80 select-none inline-block">
-                    <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> actions ({m.expenses?.length || 0})
-                  </summary>
-                  <div className="mt-1 pl-2 border-l border-accent/20">
-                    <AddExpenseForm eventId={m.id} members={members} currentUserId={currentUserId} />
-                    <ExpenseList expenses={m.expenses} currentUserId={currentUserId} />
-                  </div>
-                </details>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {(event.category === 'trip' || event.category === 'outing') && (
-        <div className="ml-3">
-          <AddMicroEventForm parentEventId={event.id} />
+      {(event.category === 'trip' || event.category === 'outing') && !isTripDesk && (
+        <div className="mt-4 border-t border-border/40 pt-4">
+          <Link
+            href={`/hub/events/${event.id}`}
+            className="group flex items-center justify-between rounded border border-accent/40 bg-accent/5 p-3 hover:bg-accent/10 transition-colors"
+          >
+            <span className="font-mono text-sm text-accent font-bold tracking-widest">
+              [ENTER_TRIP_DESK]
+            </span>
+            <span className="font-mono text-xs text-muted-foreground group-hover:text-accent transition-colors">
+              {event.microEvents?.length || 0} sub-positions →
+            </span>
+          </Link>
         </div>
       )}
 
@@ -827,9 +811,13 @@ function CreateEventForm({ onClose }: { onClose: () => void }) {
         >
           abort
         </button>
-        <CandlestickButton type="submit" loading={pending}>
-          DEPLOY_POSITION
-        </CandlestickButton>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded bg-primary px-3 py-1 font-mono text-xs text-primary-foreground disabled:opacity-50"
+        >
+          {pending ? 'DEPLOYING...' : 'DEPLOY_POSITION'}
+        </button>
       </div>
     </form>
   )
@@ -853,9 +841,12 @@ export function EventsBoard({
         <CreateEventForm onClose={() => setCreating(false)} />
       ) : (
         <div>
-          <CandlestickButton onClick={() => setCreating(true)}>
+          <button 
+            onClick={() => setCreating(true)}
+            className="rounded border border-primary px-4 py-2 font-mono text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
+          >
             + OPEN_NEW_POSITION
-          </CandlestickButton>
+          </button>
         </div>
       )}
 

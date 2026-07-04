@@ -246,6 +246,81 @@ export async function getEventsWithDetails() {
   return safeEvents as any
 }
 
+export async function getTripDesk(eventId: string) {
+  const [parentEvent, microEvents] = await Promise.all([
+    db.query.events.findFirst({
+      where: eq(events.id, eventId),
+      with: {
+        creator: true,
+        rsvps: { with: { user: true } },
+        expenses: { with: { payer: true, splits: { with: { user: true } } } },
+        polls: { with: { options: { with: { votes: { with: { user: true } } } } } },
+        vaultMedia: { with: { uploader: true } },
+      },
+    }),
+    db.query.events.findMany({
+      where: eq(events.parentEventId, eventId),
+      orderBy: [desc(events.createdAt)],
+      with: {
+        creator: true,
+        rsvps: { with: { user: true } },
+        expenses: { with: { payer: true, splits: { with: { user: true } } } },
+        polls: { with: { options: { with: { votes: { with: { user: true } } } } } },
+        vaultMedia: { with: { uploader: true } },
+      },
+    })
+  ])
+
+  if (!parentEvent) return null
+
+  const mapSafe = (e: any) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    category: e.category,
+    location: e.location,
+    locationCustom: e.locationCustom,
+    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+    isLive: e.isLive,
+    whatsappBlasted: e.whatsappBlasted,
+    createdBy: e.createdBy,
+    creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
+    rsvps: (e.rsvps || []).map((r: any) => ({
+      id: r.id,
+      status: r.status,
+      userId: r.userId,
+      user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
+    })),
+    microEvents: [], // Keep signature compatible with EventCard
+    polls: (e.polls || []).map((p: any) => ({
+      id: p.id,
+      question: p.question,
+      options: (p.options || []).map((o: any) => ({
+        id: o.id,
+        label: o.label,
+        votes: (o.votes || []).map((v: any) => ({
+          id: v.id,
+          userId: v.userId,
+          user: v.user ? { id: v.user.id, username: v.user.username, displayName: v.user.displayName } : null
+        }))
+      }))
+    })),
+    expenses: e.expenses || [],
+    vaultMedia: (e.vaultMedia || []).map((v: any) => ({
+      id: v.id,
+      cloudinaryUrl: v.cloudinaryUrl,
+      mediaType: v.mediaType,
+      caption: v.caption,
+      uploader: v.uploader ? { id: v.uploader.id, username: v.uploader.username, displayName: v.uploader.displayName } : null
+    }))
+  })
+
+  return {
+    parent: mapSafe(parentEvent),
+    children: microEvents.map(mapSafe)
+  }
+}
+
 export async function getMembers() {
   return db.select().from(users).orderBy(users.username)
 }
