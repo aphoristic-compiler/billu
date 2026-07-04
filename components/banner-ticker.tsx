@@ -30,7 +30,7 @@ export function BannerTicker({ text }: { text: string }) {
         ref={contentRef}
         className="flex items-center whitespace-nowrap py-2.5"
         style={{
-          animation: `ticker-scroll ${Math.max(sentences.length * 8, 30)}s linear infinite`,
+          animation: `ticker-scroll ${Math.max(sentences.length * 4, 15)}s linear infinite`,
           animationPlayState: isPaused ? 'paused' : 'running',
         }}
       >
