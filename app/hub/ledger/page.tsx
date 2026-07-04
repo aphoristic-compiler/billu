@@ -88,7 +88,7 @@ export default function LedgerPage() {
                   </p>
                   {debt.note && <p className="text-tertiary italic">{debt.note}</p>}
                 </div>
-                {debt.status === 'pending' && (
+                {debt.status === 'pending' && debt.toUser === user.id && (
                   <button
                     onClick={() => handleSettleSingle(debt.id)}
                     className="text-[10px] text-profit border border-profit/30 bg-profit/5 px-2 py-1 rounded hover:bg-profit/10"

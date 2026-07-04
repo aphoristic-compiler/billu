@@ -228,8 +228,8 @@ export async function settleDebts() {
   })
   
   // Simplify debts using multi-hop settlement
-  // For now, just mark pending debts as settled if user initiates
-  const pending = userDebts.filter((d) => d.status === 'pending' && d.fromUser === user.id)
+  // For now, just mark pending debts as settled if user initiates (only as creditor)
+  const pending = userDebts.filter((d) => d.status === 'pending' && d.toUser === user.id)
   
   for (const debt of pending) {
     await db
@@ -249,9 +249,9 @@ export async function settleSingleDebt(debtId: string) {
   const [debt] = await db.select().from(debts).where(eq(debts.id, debtId)).limit(1)
   if (!debt) throw new Error('Debt not found')
   
-  // Can only settle if you are involved
-  if (debt.fromUser !== user.id && debt.toUser !== user.id) {
-    throw new Error('Not authorized to settle this debt')
+  // Can only settle if you are the creditor
+  if (debt.toUser !== user.id) {
+    throw new Error('Only the creditor can mark this debt as settled')
   }
 
   await db
