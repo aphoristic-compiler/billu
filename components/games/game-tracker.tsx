@@ -61,7 +61,7 @@ export function GameTracker({
       if (m.game?.name !== 'Poker') continue
       const me = m.participants.find((p) => p.userId === currentUserId)
       if (!me) continue
-      pnl += (Number(me.stats?.cash_out) || 0) - (Number(me.stats?.buy_in) || 0)
+      pnl += (Number(me.stats?.chips_out) || 0) - (Number(me.stats?.chips_in) || 0)
     }
     return pnl
   }, [matches, currentUserId])
@@ -77,7 +77,7 @@ export function GameTracker({
         else map[p.userId].losses++
         if (m.game?.name === 'Poker') {
           map[p.userId].pokerPnl +=
-            (Number(p.stats?.cash_out) || 0) - (Number(p.stats?.buy_in) || 0)
+            (Number(p.stats?.chips_out) || 0) - (Number(p.stats?.chips_in) || 0)
         }
       }
     }
@@ -99,9 +99,9 @@ export function GameTracker({
             your_record
           </p>
           <p className="mt-1 font-mono text-2xl font-bold">
-            <span className="text-profit">{myWins}W</span>
+            <span className="text-accent">{myWins}W</span>
             <span className="text-muted-foreground"> / </span>
-            <span className="text-loss">{myLosses}L</span>
+            <span className="text-secondary">{myLosses}L</span>
           </p>
         </div>
         <div className="rounded border border-border bg-card p-4">
@@ -114,7 +114,7 @@ export function GameTracker({
               myPokerPnl >= 0 ? 'text-profit' : 'text-loss',
             )}
           >
-            {myPokerPnl >= 0 ? '+' : '−'}₹{Math.abs(myPokerPnl).toLocaleString('en-IN')}
+            {myPokerPnl >= 0 ? '+' : '−'}{Math.abs(myPokerPnl).toLocaleString('en-IN')} chips
           </p>
         </div>
       </div>
@@ -131,7 +131,7 @@ export function GameTracker({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Leaderboard */}
         <section className="rounded border border-border bg-card p-4">
-          <h2 className="font-mono text-sm font-bold text-accent">ALPHA_LEADERBOARD</h2>
+          <h2 className="font-mono text-sm font-bold text-accent">GLOBAL_RANKINGS</h2>
           {leaderboard.length === 0 ? (
             <p className="mt-3 font-mono text-xs text-muted-foreground">
               No matches logged. Everyone is unranked. Everyone is safe. For now.
@@ -151,12 +151,12 @@ export function GameTracker({
                   </span>
                   <span className="flex items-center gap-3">
                     <span>
-                      <span className="text-profit">{row.wins}W</span>{' '}
-                      <span className="text-loss">{row.losses}L</span>
+                      <span className="text-accent">{row.wins}W</span>{' '}
+                      <span className="text-secondary">{row.losses}L</span>
                     </span>
                     {row.pokerPnl !== 0 && (
                       <span className={row.pokerPnl > 0 ? 'text-profit' : 'text-loss'}>
-                        {row.pokerPnl > 0 ? '+' : '−'}₹{Math.abs(row.pokerPnl).toLocaleString('en-IN')}
+                        {row.pokerPnl > 0 ? '+' : '−'}{Math.abs(row.pokerPnl).toLocaleString('en-IN')} chips
                       </span>
                     )}
                   </span>
@@ -168,9 +168,9 @@ export function GameTracker({
 
         {/* Recent matches */}
         <section className="rounded border border-border bg-card p-4">
-          <h2 className="font-mono text-sm font-bold text-accent">TRADE_HISTORY</h2>
+          <h2 className="font-mono text-sm font-bold text-accent">MATCH_HISTORY</h2>
           {matches.length === 0 ? (
-            <p className="mt-3 font-mono text-xs text-muted-foreground">No trades executed.</p>
+            <p className="mt-3 font-mono text-xs text-muted-foreground">No matches played yet.</p>
           ) : (
             <ul className="mt-3 flex max-h-96 flex-col gap-3 overflow-y-auto">
               {matches.slice(0, 15).map((m) => {
@@ -188,10 +188,10 @@ export function GameTracker({
                       </span>
                     </p>
                     <p className="mt-0.5">
-                      <span className="text-profit">
+                      <span className="text-accent">
                         W[{winners.map((p) => p.user.username).join(', ') || '—'}]
                       </span>{' '}
-                      <span className="text-loss">
+                      <span className="text-secondary">
                         L[{losers.map((p) => p.user.username).join(', ') || '—'}]
                       </span>
                     </p>

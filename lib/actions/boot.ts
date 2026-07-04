@@ -41,3 +41,14 @@ export async function markBootSeen() {
     await db.update(users).set({ bootSequenceSeen: true }).where(eq(users.id, user.id))
   }
 }
+
+export async function addLore(memberName: string, text: string) {
+  await requireDbUser()
+  await db.insert(systemLeaks).values({
+    memberName: memberName,
+    body: text,
+    category: 'intel',
+    title: 'User Submitted Intel',
+    rarity: 'common'
+  })
+}

@@ -6,12 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "clear-users": "tsx scripts/clear-users.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@clerk/nextjs": "^7.5.12",
-    "@google/genai": "^2.10.0",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/analytics": "1.6.1",
     "class-variance-authority": "^0.7.1",

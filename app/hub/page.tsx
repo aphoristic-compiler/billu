@@ -1,168 +1,137 @@
-'use client';
+import { getDashboardData } from '@/lib/actions/dashboard'
+import { getDailyBanner } from '@/lib/actions/banner'
+import Link from 'next/link'
+import { Activity, Gamepad2, Landmark, Wallet, Vault } from 'lucide-react'
 
-import { useEffect, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { CldUploadWidget } from 'next-cloudinary';
-import { getVaultMedia, getQuotes, addQuote, deleteQuote } from '@/lib/actions/vault';
-import { toast } from '@/components/terminal-toast';
-import { CandlestickButton } from '@/components/candlestick-button';
-import Image from 'next/image';
-
-export default function VaultPage() {
-  const { user } = useUser();
-  const [media, setMedia] = useState<any[]>([]);
-  const [quotes, setQuotes] = useState<any[]>([]);
-  const [showQuoteForm, setShowQuoteForm] = useState(false);
-  const [quoteText, setQuoteText] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [loadingQuote, setLoadingQuote] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      const [m, q] = await Promise.all([getVaultMedia(), getQuotes()]);
-      setMedia(m);
-      setQuotes(q);
-    };
-    load();
-  }, []);
-
-  if (!user) return null;
-
-  const handleUploadSuccess = async () => {
-    toast('UPLOAD_COMPLETE', 'success');
-    const m = await getVaultMedia();
-    setMedia(m);
-  };
-
-  const handleAddQuote = async () => {
-    if (!quoteText.trim()) return;
-    setLoadingQuote(true);
-    try {
-      await addQuote(quoteText);
-      toast('QUOTE_ADDED', 'success');
-      const q = await getQuotes();
-      setQuotes(q);
-      setQuoteText('');
-      setShowQuoteForm(false);
-    } catch (err) {
-      toast('QUOTE_FAILED', 'warning');
-    } finally {
-      setLoadingQuote(false);
-    }
-  };
-
-  const handleDeleteQuote = async (id: string) => {
-    try {
-      await deleteQuote(id);
-      toast('QUOTE_DELETED', 'success');
-      const q = await getQuotes();
-      setQuotes(q);
-    } catch (err) {
-      toast('DELETE_FAILED', 'warning');
-    }
-  };
+export default async function HubDashboard() {
+  const [data, bannerText] = await Promise.all([
+    getDashboardData(),
+    getDailyBanner(),
+  ])
 
   return (
-    <div className="space-y-4 font-mono text-xs">
-      <div className="border border-accent/30 bg-background/50 p-4">
-        <h2 className="mb-3 text-accent">MEMORIAL_VAULT</h2>
-        <p className="text-secondary mb-3">Preserve memories and moments from the Saturo Wing</p>
-
-        <CldUploadWidget
-          uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ? `preset_${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}` : undefined}
-          onSuccess={handleUploadSuccess}
-        >
-          {({ open }) => (
-            <button
-              onClick={() => open()}
-              className="w-full border border-accent/30 bg-background px-3 py-2 text-secondary hover:border-accent hover:text-accent"
-            >
-              + UPLOAD_PHOTO
-            </button>
-          )}
-        </CldUploadWidget>
+    <div className="space-y-6">
+      {/* Daily AI Banner */}
+      <div className="w-full bg-accent/10 border-b border-accent/20 p-3 text-center">
+        <p className="font-mono text-xs md:text-sm text-accent max-w-4xl mx-auto italic">
+          "{bannerText}"
+        </p>
       </div>
 
-      {media.length > 0 && (
-        <div className="border border-accent/30 bg-background/50 p-4">
-          <h3 className="mb-3 text-accent">MEDIA_GALLERY ({media.length})</h3>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 max-h-96 overflow-y-auto">
-            {media.map((item, i) => (
-              <div key={i} className="border border-accent/20 overflow-hidden aspect-square">
-                {item.type === 'image' ? (
-                  <Image
-                    src={item.url}
-                    alt="Vault memory"
-                    width={200}
-                    height={200}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <video
-                    src={item.url}
-                    className="w-full h-full object-cover"
-                    controls
-                  />
-                )}
+      {/* Welcome Section */}
+      <section className="border border-border bg-card/50 p-6 rounded-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-3 opacity-10">
+          <Landmark size={120} />
+        </div>
+        <h1 className="font-mono text-2xl font-bold text-primary relative z-10">
+          WELCOME_BACK, @{data.user.username}
+        </h1>
+        <p className="mt-2 font-mono text-xs text-muted-foreground max-w-lg relative z-10">
+          Saturo Wing Central Dashboard. Monitor your positions, track capital exposure, and deploy assets into the vault.
+        </p>
+      </section>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* Quick Links */}
+        <div className="md:col-span-2 grid grid-cols-2 gap-4">
+          <Link href="/hub/events" className="group p-4 border border-border bg-card rounded-lg hover:border-accent hover:bg-accent/5 transition-all">
+            <div className="flex items-center gap-3 mb-2 text-accent">
+              <Activity size={20} />
+              <h3 className="font-mono text-sm font-bold">POSITIONS (EVENTS)</h3>
+            </div>
+            <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
+              Manage trips, outings, and micro-events.
+            </p>
+          </Link>
+
+          <Link href="/hub/ledger" className="group p-4 border border-border bg-card rounded-lg hover:border-profit hover:bg-profit/5 transition-all">
+            <div className="flex items-center gap-3 mb-2 text-profit">
+              <Wallet size={20} />
+              <h3 className="font-mono text-sm font-bold">LEDGER</h3>
+            </div>
+            <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
+              Track debts and settle margin calls.
+            </p>
+          </Link>
+
+          <Link href="/hub/arcade" className="group p-4 border border-border bg-card rounded-lg hover:border-warning hover:bg-warning/5 transition-all">
+            <div className="flex items-center gap-3 mb-2 text-warning">
+              <Gamepad2 size={20} />
+              <h3 className="font-mono text-sm font-bold">ARCADE</h3>
+            </div>
+            <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
+              Play Mistral-generated games and compete.
+            </p>
+          </Link>
+
+          <Link href="/hub/vault" className="group p-4 border border-border bg-card rounded-lg hover:border-secondary hover:bg-secondary/5 transition-all">
+            <div className="flex items-center gap-3 mb-2 text-secondary">
+              <Vault size={20} />
+              <h3 className="font-mono text-sm font-bold">VAULT</h3>
+            </div>
+            <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
+              Memorial vault for wing media and quotes.
+            </p>
+          </Link>
+        </div>
+
+        {/* Ledger Summary Widget */}
+        <div className="border border-border bg-card rounded-lg p-5 flex flex-col">
+          <h3 className="font-mono text-sm font-bold text-muted-foreground mb-4 border-b border-border/50 pb-2">
+            YOUR_PORTFOLIO
+          </h3>
+          
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="text-center mb-6">
+              <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Net Balance</p>
+              <p className={`font-mono text-3xl font-bold ${data.netBalance > 0 ? 'text-profit' : data.netBalance < 0 ? 'text-loss' : 'text-foreground'}`}>
+                {data.netBalance > 0 ? '+' : ''}₹{data.netBalance.toFixed(2)}
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 text-center border-t border-border/30 pt-4">
+              <div>
+                <p className="font-mono text-[10px] text-loss mb-1">Owed By You</p>
+                <p className="font-mono text-sm text-loss font-bold">₹{data.totalUserOwes.toFixed(2)}</p>
+              </div>
+              <div className="border-l border-border/30">
+                <p className="font-mono text-[10px] text-profit mb-1">Owed To You</p>
+                <p className="font-mono text-sm text-profit font-bold">₹{data.totalOwedToUser.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+          <Link href="/hub/ledger" className="mt-6 w-full text-center border border-border py-2 rounded font-mono text-xs hover:bg-card-hover transition-colors">
+            OPEN_LEDGER →
+          </Link>
+        </div>
+      </div>
+
+      {/* Activity Log */}
+      <section className="border border-border bg-card rounded-lg p-5">
+        <h3 className="font-mono text-sm font-bold text-accent mb-4 border-b border-border/50 pb-2">
+          SYSTEM_LOG
+        </h3>
+        {data.recentActivity.length === 0 ? (
+          <p className="font-mono text-xs text-muted-foreground">No recent activity detected.</p>
+        ) : (
+          <div className="space-y-3">
+            {data.recentActivity.map(activity => (
+              <div key={activity.id} className="flex gap-3 text-xs font-mono items-start border-l-2 border-border/50 pl-3">
+                <span className="text-muted-foreground whitespace-nowrap">
+                  [{new Date(activity.createdAt).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}]
+                </span>
+                <span className="text-foreground">
+                  {typeof activity.payload === 'object' && activity.payload !== null 
+                    ? (activity.payload as any).text 
+                    : JSON.stringify(activity.payload)}
+                </span>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      <button
-        onClick={() => setShowQuoteForm(!showQuoteForm)}
-        className="w-full border border-accent/30 bg-background/50 p-2 text-secondary hover:border-accent hover:text-accent"
-      >
-        {showQuoteForm ? '[−] QUOTES_WALL' : '[+] QUOTES_WALL'} ({quotes.length})
-      </button>
-
-      {showQuoteForm && (
-        <div className="border border-accent/30 bg-background/50 p-4 space-y-2">
-          <label className="block text-secondary">ADD_QUOTE</label>
-          <textarea
-            value={quoteText}
-            onChange={e => setQuoteText(e.target.value)}
-            className="w-full border border-accent/30 bg-background px-2 py-1 text-foreground placeholder-tertiary focus:border-accent focus:outline-none"
-            rows={2}
-            placeholder="Enter a memorable quote..."
-          />
-          <CandlestickButton
-            onClick={handleAddQuote}
-            isLoading={loadingQuote}
-            disabled={!quoteText.trim()}
-            className="w-full"
-          >
-            {loadingQuote ? 'ADDING...' : 'ADD_QUOTE'}
-          </CandlestickButton>
-        </div>
-      )}
-
-      {quotes.length > 0 && (
-        <div className="border border-accent/30 bg-background/50 p-4">
-          <h3 className="mb-2 text-accent">QUOTES_TICKER</h3>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {quotes.map((quote, i) => (
-              <div key={i} className="border-l-2 border-accent/30 pl-2 py-1">
-                <p className="text-accent italic">{`"${quote.text}"`}</p>
-                <div className="flex items-center justify-between text-tertiary">
-                  <span className="text-xs">{new Date(quote.createdAt).toLocaleDateString()}</span>
-                  {quote.userId === user.id && (
-                    <button
-                      onClick={() => handleDeleteQuote(quote.id)}
-                      className="text-secondary hover:text-warning"
-                    >
-                      [DEL]
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+        )}
+      </section>
 
     </div>
-  );
+  )
 }

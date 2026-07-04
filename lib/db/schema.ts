@@ -85,6 +85,8 @@ export const events = pgTable("events", {
   endsAt: timestamp("ends_at"),
   isLive: boolean("is_live").notNull().default(false),
   whatsappBlasted: boolean("whatsapp_blasted").notNull().default(false),
+  notes: text("notes"),
+  isArchived: boolean("is_archived").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 })
@@ -247,6 +249,14 @@ export const vaultMedia = pgTable("vault_media", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 })
 
+// ─── 13.5 daily_banners ───────────────────────────────────────────────────
+export const dailyBanners = pgTable("daily_banners", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  date: varchar("date", { length: 10 }).notNull().unique(), // YYYY-MM-DD
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+})
+
 // ─── 14. quotes ───────────────────────────────────────────────────────────
 export const quotes = pgTable("quotes", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -317,6 +327,8 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   creator: one(users, { fields: [events.createdBy], references: [users.id] }),
   rsvps: many(rsvps),
   polls: many(polls),
+  expenses: many(expenses),
+  vaultMedia: many(vaultMedia),
 }))
 
 export const rsvpsRelations = relations(rsvps, ({ one }) => ({
@@ -361,6 +373,7 @@ export const matchParticipantsRelations = relations(matchParticipants, ({ one })
 export const expensesRelations = relations(expenses, ({ one, many }) => ({
   payer: one(users, { fields: [expenses.paidBy], references: [users.id] }),
   splits: many(expenseSplits),
+  event: one(events, { fields: [expenses.eventId], references: [events.id] }),
 }))
 
 export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
@@ -399,5 +412,9 @@ export const vaultMediaRelations = relations(vaultMedia, ({ one }) => ({
   uploader: one(users, {
     fields: [vaultMedia.uploadedBy],
     references: [users.id],
+  }),
+  event: one(events, {
+    fields: [vaultMedia.eventId],
+    references: [events.id],
   }),
 }))

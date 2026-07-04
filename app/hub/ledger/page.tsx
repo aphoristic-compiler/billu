@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { getDebts, getExpenses, settleDebts } from '@/lib/actions/expenses';
+import { getDebts, getExpenses, settleDebts, settleSingleDebt } from '@/lib/actions/expenses';
 import { toast } from '@/components/terminal-toast';
 import { CandlestickButton } from '@/components/candlestick-button';
 
@@ -16,7 +16,7 @@ export default function LedgerPage() {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [d, e] = await Promise.all([getDebts(user.id), getExpenses(user.id)]);
+      const [d, e] = await Promise.all([getDebts(), getExpenses()]);
       setDebts(d);
       setExpenses(e);
     };
@@ -28,19 +28,31 @@ export default function LedgerPage() {
   const handleSettle = async () => {
     setSettling(true);
     try {
-      await settleDebts(user.id);
-      toast('DEBTS_SIMPLIFIED', 'success');
-      const [d, e] = await Promise.all([getDebts(user.id), getExpenses(user.id)]);
+      await settleDebts();
+      toast('DEBTS_SETTLED', 'success');
+      const d = await getDebts();
       setDebts(d);
-      setExpenses(e);
     } catch (err) {
-      toast('SETTLE_FAILED', 'warning');
+      toast('SETTLEMENT_FAILED', 'error');
     } finally {
       setSettling(false);
     }
   };
 
-  const netBalance = debts.reduce((sum, d) => sum + (d.fromUser === user.id ? -d.amount : d.amount), 0);
+  const handleSettleSingle = async (debtId: string) => {
+    try {
+      await settleSingleDebt(debtId);
+      toast('DEBT_SETTLED', 'success');
+      const d = await getDebts();
+      setDebts(d);
+    } catch (err: any) {
+      toast(err.message || 'SETTLEMENT_FAILED', 'error');
+    }
+  };
+
+  const netBalance = debts
+    .filter((d) => d.status === 'pending')
+    .reduce((sum, d) => sum + (d.fromUser === user.id ? -d.amount : d.amount), 0);
 
   return (
     <div className="space-y-4 font-mono text-xs">
@@ -57,7 +69,7 @@ export default function LedgerPage() {
           <div>
             <p className="text-secondary">TOTAL_EXPENSES</p>
             <p className="text-2xl font-bold text-accent">{expenses.length}</p>
-            <p className="text-tertiary">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</p>
+            <p className="text-tertiary">{expenses.reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}</p>
           </div>
         </div>
       </div>
@@ -67,13 +79,23 @@ export default function LedgerPage() {
           <h3 className="mb-2 text-accent">ACTIVE_DEBTS</h3>
           <div className="space-y-2">
             {debts.map((debt, i) => (
-              <div key={i} className="border-l-2 border-accent/30 pl-2">
-                <p className="text-secondary">{debt.status.toUpperCase()}</p>
-                <p className="text-accent">{Math.abs(debt.amount).toFixed(2)}</p>
-                <p className="text-tertiary">
-                  {debt.fromUser === user.id ? `YOU→${debt.toUser}` : `${debt.fromUser}→YOU`}
-                </p>
-                {debt.note && <p className="text-tertiary italic">{debt.note}</p>}
+              <div key={i} className="border-l-2 border-accent/30 pl-2 flex justify-between items-center pr-2">
+                <div>
+                  <p className="text-secondary">{debt.status.toUpperCase()}</p>
+                  <p className="text-accent">{Math.abs(debt.amount).toFixed(2)}</p>
+                  <p className="text-tertiary">
+                    {debt.fromUser === user.id ? `YOU→${debt.toUser}` : `${debt.fromUser}→YOU`}
+                  </p>
+                  {debt.note && <p className="text-tertiary italic">{debt.note}</p>}
+                </div>
+                {debt.status === 'pending' && (
+                  <button
+                    onClick={() => handleSettleSingle(debt.id)}
+                    className="text-[10px] text-profit border border-profit/30 bg-profit/5 px-2 py-1 rounded hover:bg-profit/10"
+                  >
+                    [SETTLE]
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -98,8 +120,15 @@ export default function LedgerPage() {
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {expenses.map((exp, i) => (
               <div key={i} className="border-l-2 border-accent/10 pl-2 text-tertiary">
-                <p className="text-accent">{exp.description}</p>
-                <p>{exp.amount.toFixed(2)} | {new Date(exp.createdAt).toLocaleDateString()}</p>
+                <p className="text-accent">
+                  {exp.title}
+                  {exp.event && (
+                    <span className="text-muted-foreground">
+                      {' '}@ {exp.event.location === 'other' ? exp.event.locationCustom : exp.event.location?.replace('_', ' ')}
+                    </span>
+                  )}
+                </p>
+                <p>{exp.totalAmount.toFixed(2)} | {new Date(exp.createdAt).toLocaleDateString()}</p>
               </div>
             ))}
           </div>

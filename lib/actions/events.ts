@@ -145,12 +145,17 @@ export async function votePoll(pollId: string, pollOptionId: string) {
 
 export async function getEventsWithDetails() {
   const topLevel = await db.query.events.findMany({
-    where: isNull(events.parentEventId),
+    where: and(isNull(events.parentEventId), eq(events.isArchived, false)),
     orderBy: [desc(events.createdAt)],
     with: {
       creator: true,
       rsvps: { with: { user: true } },
-      microEvents: true,
+      microEvents: {
+        with: { expenses: { with: { payer: true, splits: { with: { user: true } } } } }
+      },
+      expenses: {
+        with: { payer: true, splits: { with: { user: true } } }
+      },
       polls: {
         with: {
           options: { with: { votes: { with: { user: true } } } },
@@ -163,4 +168,71 @@ export async function getEventsWithDetails() {
 
 export async function getMembers() {
   return db.select().from(users).orderBy(users.username)
+}
+
+export async function addMicroEvent(parentEventId: string, input: { title: string; location: string; locationCustom?: string; startsAt?: string }) {
+  const user = await requireDbUser()
+  const [m] = await db.insert(events).values({
+    parentEventId,
+    createdBy: user.id,
+    title: input.title,
+    category: 'treat' as const,
+    location: (input.location || 'other') as any,
+    locationCustom: input.locationCustom || null,
+    startsAt: input.startsAt ? new Date(input.startsAt) : null,
+  }).returning()
+  
+  await logActivity(user.id, 'event_created', `[TICK] sub_position ${tickerize(input.title)} deployed by @${user.username}`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/events')
+  return m
+}
+
+export async function archiveEvent(eventId: string) {
+  const user = await requireDbUser()
+  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+  if (!event) return
+  if (event.createdBy !== user.id) throw new Error('Only the creator can vault this position.')
+  
+  await db.update(events).set({ isArchived: true }).where(eq(events.id, eventId))
+  // Also archive microevents
+  await db.update(events).set({ isArchived: true }).where(eq(events.parentEventId, eventId))
+  
+  await logActivity(user.id, 'event_archived', `[VAULT] ${tickerize(event.title)} vaulted by @${user.username}`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/events')
+}
+
+export async function getArchivedEvents() {
+  await requireDbUser()
+  return await db.query.events.findMany({
+    where: and(eq(events.isArchived, true), isNull(events.parentEventId)),
+    orderBy: [desc(events.createdAt)],
+    with: {
+      creator: true,
+      rsvps: {
+        with: { user: true }
+      },
+      expenses: {
+        with: { splits: true, payer: true }
+      },
+      vaultMedia: {
+        with: { uploader: true }
+      },
+      microEvents: {
+        with: {
+          creator: true,
+          rsvps: {
+            with: { user: true }
+          },
+          expenses: {
+            with: { splits: true, payer: true }
+          },
+          vaultMedia: {
+            with: { uploader: true }
+          },
+        }
+      }
+    }
+  })
 }

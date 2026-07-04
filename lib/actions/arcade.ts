@@ -5,6 +5,7 @@ import { desc, eq, and } from 'drizzle-orm'
 import { db, activeArcadeGame, arcadeLeaderboard } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
+import { queryMistral } from '@/lib/mistral'
 
 export async function getArcadeData() {
   const [active] = await db
@@ -35,31 +36,31 @@ function stripCodeFences(text: string) {
 export async function generateGame(userPrompt: string) {
   const user = await requireDbUser()
   if (!userPrompt.trim()) throw new Error('Prompt required')
-  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set')
 
-  const { GoogleGenAI } = await import('@google/genai')
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-
-  const systemPrompt = `You are an arcade game generator. Generate a complete, playable HTML5 game based on this request: "${userPrompt}"
+  const systemPrompt = `You are a master arcade game developer. Generate a complex, highly polished, and playable HTML5 game based on this request: "${userPrompt}"
 
 STRICT REQUIREMENTS:
 - Return ONLY a complete self-contained HTML document (inline CSS + JS). No markdown, no explanations, no code fences.
 - Canvas-based, dark background (#0B0C10), neon green (#34C759) / red (#FF3B30) / gold (#FFD60A) accents, monospace font.
 - Keyboard controls (arrows/WASD/space). Also support click/tap where sensible.
 - Track an integer score. Show it on screen at all times.
-- On game over, show "GAME OVER — SCORE: <n>" and call:
+- Implement polished game mechanics: increasing difficulty, multiple enemy types, power-ups, particle effects, and smooth animations (using requestAnimationFrame).
+- Add sound effects using the Web Audio API if possible (synthesized sounds like beeps/boops for jumping/shooting/explosions).
+- On game over, show a stylized "GAME OVER — SCORE: <n>" screen and call:
     window.parent.postMessage({ type: 'arcade_score', score: <n> }, '*')
 - Also post the score every time it changes:
     window.parent.postMessage({ type: 'arcade_score_live', score: <n> }, '*')
-- Include a "restart" key (R).
-- Keep it under 400 lines. It must run with zero external resources.`
+- Include a "restart" key (R) to reset the state completely.
+- You are not bound by line limits. Write as much code as needed to make the game deep, engaging, and feature-rich (can take up to 2-5 minutes to generate). It must run with zero external resources.`
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: systemPrompt,
-  })
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ]
 
-  const html = stripCodeFences(response.text ?? '')
+  const responseText = await queryMistral(messages, user.id)
+
+  const html = stripCodeFences(responseText ?? '')
   if (!html.toLowerCase().includes('<html') && !html.toLowerCase().includes('<canvas')) {
     throw new Error('Model returned invalid game code')
   }

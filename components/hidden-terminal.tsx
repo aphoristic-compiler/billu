@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getLeakForMember } from '@/lib/actions/boot'
+import { getLeakForMember, addLore } from '@/lib/actions/boot'
 import { getUserStats } from '@/lib/actions/stats'
+import { queryWingAI } from '@/lib/actions/ai'
 
 type TermLine = { text: string; kind: 'input' | 'output' | 'error' }
 
@@ -15,6 +16,8 @@ const HELP = `Available commands:
   sudo short anshul       attempt a short position
   rm -rf sleep_schedule   attempt cleanup
   history                 last 10 commands
+  add_lore <name> <txt>   submit intel for a member
+  <anything else>         ask Wing AI a question
   clear                   clear terminal
   exit                    attempt escape`
 
@@ -123,8 +126,30 @@ export function HiddenTerminal() {
             print('decryption failed.', 'error')
           }
         }
+      } else if (lower.startsWith('add_lore ')) {
+        const parts = cmd.split(' ')
+        if (parts.length < 3) {
+          print('usage: add_lore <member_name> <lore_text>', 'error')
+        } else {
+          const name = parts[1]
+          const text = parts.slice(2).join(' ')
+          print(`saving intel for ${name}...`)
+          try {
+            await addLore(name, text)
+            print(`intel secured.`)
+          } catch {
+            print(`failed to secure intel.`, 'error')
+          }
+        }
       } else {
-        print(`command not found: ${cmd}. type 'help'.`, 'error')
+        print(`querying Wing AI...`)
+        try {
+          const aiResponse = await queryWingAI(cmd)
+          print(`\n${aiResponse}\n`, 'output')
+        } catch (e: any) {
+          print(`Wing AI error: ${e.message}`, 'error')
+          print(`command not found: ${cmd}. type 'help'.`, 'error')
+        }
       }
     },
     [],

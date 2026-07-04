@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
 import { desc, eq } from 'drizzle-orm'
 import { db, activeArcadeGame } from '@/lib/db'
 import { getCurrentDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
+import { queryMistral } from '@/lib/mistral'
 
 export const maxDuration = 60
 
@@ -46,13 +46,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `${SYSTEM_PROMPT}\n\nUser's game prompt: ${prompt.trim()}`,
-    })
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: prompt.trim() }
+    ];
+    
+    const responseText = await queryMistral(messages, user.id);
 
-    let code = response.text ?? ''
+    let code = responseText ?? ''
     // strip markdown fences if the model disobeys
     code = code
       .replace(/^```(?:html)?\s*/i, '')

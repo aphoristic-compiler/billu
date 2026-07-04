@@ -43,16 +43,18 @@ export async function addExpense(input: {
   )
 
   // Everyone who owes a share (other than the payer) gets a pending debt
-  await db.insert(debts).values(
-    input.splits
-      .filter((s) => s.userId !== input.paidBy && s.amount > 0)
-      .map((s) => ({
-        fromUser: s.userId,
-        toUser: input.paidBy,
-        amount: s.amount,
-        expenseId: expense.id,
-      })),
-  )
+  const newDebts = input.splits
+    .filter((s) => s.userId !== input.paidBy && s.amount > 0)
+    .map((s) => ({
+      fromUser: s.userId,
+      toUser: input.paidBy,
+      amount: s.amount,
+      expenseId: expense.id,
+    }));
+    
+  if (newDebts.length > 0) {
+    await db.insert(debts).values(newDebts);
+  }
 
   await logActivity(
     user.id,
@@ -201,31 +203,33 @@ export async function settleSimplified(s: Settlement) {
   revalidatePath('/hub/ledger')
 }
 
-export async function getDebts(userId: string) {
-  return await db.query.debts.findMany({
-    where: (d) => or(eq(d.fromUser, userId), eq(d.toUser, userId)),
-  })
-}
-
-export async function getExpenses(userId: string) {
-  return await db.query.expenses.findMany({
-    where: eq(expenses.createdBy, userId),
-    orderBy: [desc(expenses.createdAt)],
-  })
-}
-
-export async function settleDebts(userId: string) {
+export async function getDebts() {
   const user = await requireDbUser()
-  if (user.id !== userId) throw new Error('Unauthorized')
+  return await db.query.debts.findMany({
+    where: (d) => or(eq(d.fromUser, user.id), eq(d.toUser, user.id)),
+  })
+}
+
+export async function getExpenses() {
+  const user = await requireDbUser()
+  return await db.query.expenses.findMany({
+    where: eq(expenses.paidBy, user.id),
+    orderBy: [desc(expenses.createdAt)],
+    with: { event: true },
+  })
+}
+
+export async function settleDebts() {
+  const user = await requireDbUser()
   
   // Get all debts for this user
   const userDebts = await db.query.debts.findMany({
-    where: (d) => or(eq(d.fromUser, userId), eq(d.toUser, userId)),
+    where: (d) => or(eq(d.fromUser, user.id), eq(d.toUser, user.id)),
   })
   
   // Simplify debts using multi-hop settlement
   // For now, just mark pending debts as settled if user initiates
-  const pending = userDebts.filter((d) => d.status === 'pending' && d.fromUser === userId)
+  const pending = userDebts.filter((d) => d.status === 'pending' && d.fromUser === user.id)
   
   for (const debt of pending) {
     await db
@@ -237,6 +241,45 @@ export async function settleDebts(userId: string) {
   await logActivity(user.id, 'debts_settled', `[RECONCILE] net balances simplified`)
   revalidatePath('/hub')
   revalidatePath('/hub/ledger')
+}
+
+export async function settleSingleDebt(debtId: string) {
+  const user = await requireDbUser()
+  
+  const [debt] = await db.select().from(debts).where(eq(debts.id, debtId)).limit(1)
+  if (!debt) throw new Error('Debt not found')
+  
+  // Can only settle if you are involved
+  if (debt.fromUser !== user.id && debt.toUser !== user.id) {
+    throw new Error('Not authorized to settle this debt')
+  }
+
+  await db
+    .update(debts)
+    .set({ status: 'settled', settledAt: new Date() })
+    .where(eq(debts.id, debtId))
+    
+  await logActivity(user.id, 'debt_settled', `[RECONCILE] individual debt settled`)
+  revalidatePath('/hub/ledger')
+}
+
+export async function deleteExpense(expenseId: string) {
+  const user = await requireDbUser()
+  
+  const [expense] = await db.select().from(expenses).where(eq(expenses.id, expenseId)).limit(1)
+  if (!expense) throw new Error('Expense not found')
+  
+  if (expense.paidBy !== user.id) {
+    throw new Error('Only the payer can delete this expense')
+  }
+
+  await db.delete(debts).where(eq(debts.expenseId, expenseId))
+  await db.delete(expenses).where(eq(expenses.id, expenseId))
+
+  await logActivity(user.id, 'expense_deleted', `[VOID] expense ${expense.title} was removed by @${user.username}`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/ledger')
+  revalidatePath('/hub/events')
 }
 
 async function settleDirectPair(fromId: string, toId: string, amount: number) {

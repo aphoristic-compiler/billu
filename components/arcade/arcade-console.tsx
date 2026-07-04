@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { generateGame, submitScore } from '@/lib/actions/arcade'
 import { CandlestickButton } from '@/components/candlestick-button'
+import { Trophy, Gamepad2 } from 'lucide-react'
 import { toast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
 
@@ -152,89 +153,127 @@ export function ArcadeConsole({
         </div>
         {generating && (
           <p className="mt-3 animate-pulse font-mono text-xs text-accent">
-            [CIPHER] gemini is compiling your game protocol... this takes ~15-30s
+            [CIPHER] mistral is compiling your game protocol... this takes ~15-30s
           </p>
         )}
       </section>
 
       {/* Active game */}
       {active ? (
-        <section className="rounded border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <section className="rounded-xl border border-accent/30 bg-card p-5 shadow-[0_0_15px_rgba(52,199,89,0.05)] relative overflow-hidden">
+          {/* subtle glow effect */}
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-accent/10 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
             <div>
-              <h2 className="font-mono text-sm font-bold text-accent">NOW_TRADING</h2>
-              <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                &quot;{active.prompt}&quot;
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-profit animate-pulse shadow-[0_0_8px_rgba(52,199,89,0.8)]" />
+                <h2 className="font-mono text-sm font-bold text-accent tracking-widest uppercase">NOW_PLAYING</h2>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-muted-foreground uppercase opacity-80">
+                PROTOCOL: <span className="text-foreground/80 lowercase">"{active.prompt}"</span>
               </p>
             </div>
-            <div className="flex items-center gap-4 font-mono text-xs">
-              <span className="text-muted-foreground">
-                LIVE: <span className="text-accent">{liveScore}</span>
-              </span>
-              <span className="text-muted-foreground">
-                YOUR_ATH: <span className="text-profit">{myBest}</span>
-              </span>
+            <div className="flex gap-4">
+              <div className="bg-background/80 border border-border px-4 py-2 rounded">
+                <p className="font-mono text-[10px] text-muted-foreground uppercase mb-0.5">Live Score</p>
+                <p className="font-mono text-lg font-bold text-accent tabular-nums leading-none shadow-accent/50 drop-shadow-md">
+                  {liveScore.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-background/80 border border-border px-4 py-2 rounded">
+                <p className="font-mono text-[10px] text-muted-foreground uppercase mb-0.5">Your ATH</p>
+                <p className="font-mono text-lg font-bold text-profit tabular-nums leading-none">
+                  {myBest.toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-border bg-background">
+          <div className="mt-5 aspect-video w-full overflow-hidden rounded-md border border-accent/20 bg-[#0B0C10] shadow-[0_0_30px_rgba(0,0,0,0.8)_inset] relative z-10">
             <iframe
               srcDoc={active.generatedCode}
               sandbox="allow-scripts"
-              className="h-full w-full border-0"
+              className="h-full w-full border-0 mix-blend-screen"
               title={`Arcade game: ${active.prompt}`}
             />
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-mono text-[11px] text-muted-foreground">
-              scores auto-file on game over{submitting && ' — filing...'}
-              {finalScore !== null && ` · last run: ${finalScore}`}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 relative z-10">
+            <p className="font-mono text-[10px] text-muted-foreground flex items-center gap-2">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-secondary/50" />
+              Scores sync automatically on GAME OVER
+              {submitting && <span className="text-warning animate-pulse ml-2">SYNCING TO CHAIN...</span>}
             </p>
+            {finalScore !== null && (
+              <p className="font-mono text-[10px] text-muted-foreground bg-accent/10 px-2 py-1 rounded text-accent">
+                Last Run: {finalScore.toLocaleString()}
+              </p>
+            )}
           </div>
         </section>
       ) : (
-        <section className="rounded border border-dashed border-border p-8 text-center">
-          <p className="font-mono text-sm text-muted-foreground">
-            No active game protocol. Compile one above.
+        <section className="rounded-xl border border-dashed border-border p-12 text-center bg-card/30 flex flex-col items-center justify-center">
+          <Gamepad2 size={32} className="text-muted-foreground mb-3 opacity-50" />
+          <p className="font-mono text-sm text-muted-foreground uppercase tracking-wider">
+            No active game protocol
           </p>
+          <p className="font-mono text-[10px] text-muted-foreground/60 mt-1">Compile a new prompt to deploy the arcade cabinet.</p>
         </section>
       )}
 
       {/* Leaderboard */}
       {active && (
-        <section className="rounded border border-border bg-card p-4">
-          <h2 className="font-mono text-sm font-bold text-accent">HIGH_SCORE.DAT</h2>
+        <section className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-4 border-b border-border/50 pb-3">
+            <Trophy size={16} className="text-warning" />
+            <h2 className="font-mono text-sm font-bold text-foreground tracking-widest">HIGH_SCORE.DAT</h2>
+          </div>
+          
           {leaderboard.length === 0 ? (
-            <p className="mt-3 font-mono text-xs text-muted-foreground">
-              Nobody has scored. The leaderboard is a graveyard.
-            </p>
+            <div className="py-8 text-center border border-dashed border-border/50 rounded bg-background/30">
+              <p className="font-mono text-xs text-muted-foreground">Nobody has scored yet.</p>
+              <p className="font-mono text-[10px] text-muted-foreground/60 mt-1">Be the first to set the bar.</p>
+            </div>
           ) : (
-            <ol className="mt-3 flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {leaderboard.map((row, i) => (
-                <li
+                <div
                   key={row.id}
                   className={cn(
-                    'flex items-center justify-between border-b border-border/50 pb-2 font-mono text-xs last:border-0',
-                    row.userId === currentUserId && 'text-accent',
+                    'group flex items-center justify-between rounded px-3 py-2.5 font-mono text-xs transition-colors',
+                    row.userId === currentUserId 
+                      ? 'bg-accent/10 border-l-2 border-accent text-accent' 
+                      : 'bg-background/40 hover:bg-background/80 border-l-2 border-transparent hover:border-border',
                   )}
                 >
-                  <span className="flex items-center gap-2">
-                    <span className={cn('w-6', i === 0 ? 'text-accent' : 'text-muted-foreground')}>
-                      #{i + 1}
+                  <div className="flex items-center gap-4">
+                    <span className={cn(
+                      'w-6 text-center font-bold', 
+                      i === 0 ? 'text-warning text-lg' : i === 1 ? 'text-[#C0C0C0]' : i === 2 ? 'text-[#CD7F32]' : 'text-muted-foreground'
+                    )}>
+                      {i === 0 ? '🏆' : `#${i + 1}`}
                     </span>
-                    <span>@{row.user.username}</span>
-                    {i === 0 && <span className="text-accent">👑</span>}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <span className="text-muted-foreground">{row.attempts} runs</span>
-                    <span className="font-bold text-profit">
+                    <span className="flex items-center gap-2">
+                      <span className="font-bold tracking-tight">@{row.user.username}</span>
+                      {row.userId === currentUserId && <span className="text-[9px] bg-accent/20 px-1.5 py-0.5 rounded text-accent uppercase">You</span>}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-6 text-right">
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline-block">
+                      {row.attempts} {row.attempts === 1 ? 'run' : 'runs'}
+                    </span>
+                    <span className={cn(
+                      "font-bold tabular-nums text-sm",
+                      i === 0 ? "text-warning drop-shadow-sm" : row.userId === currentUserId ? "text-profit" : "text-foreground"
+                    )}>
                       {row.score.toLocaleString('en-IN')}
                     </span>
-                  </span>
-                </li>
+                  </div>
+                </div>
               ))}
-            </ol>
+            </div>
           )}
         </section>
       )}

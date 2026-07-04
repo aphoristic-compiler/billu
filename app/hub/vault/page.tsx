@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { CldUploadWidget } from 'next-cloudinary';
 import { getVaultMedia, getQuotes, addQuote, deleteQuote } from '@/lib/actions/vault';
+import { getArchivedEvents } from '@/lib/actions/events';
 import { toast } from '@/components/terminal-toast';
 import { CandlestickButton } from '@/components/candlestick-button';
 import Image from 'next/image';
@@ -12,6 +13,7 @@ export default function VaultPage() {
   const { user } = useUser();
   const [media, setMedia] = useState<any[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
+  const [archivedEvents, setArchivedEvents] = useState<any[]>([]);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteText, setQuoteText] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -19,9 +21,10 @@ export default function VaultPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [m, q] = await Promise.all([getVaultMedia(), getQuotes()]);
+      const [m, q, ae] = await Promise.all([getVaultMedia(), getQuotes(), getArchivedEvents()]);
       setMedia(m);
       setQuotes(q);
+      setArchivedEvents(ae);
     };
     load();
   }, []);
@@ -82,6 +85,59 @@ export default function VaultPage() {
           )}
         </CldUploadWidget>
       </div>
+
+      {archivedEvents.length > 0 && (
+        <div className="border border-accent/30 bg-background/50 p-4">
+          <h3 className="mb-3 text-accent">LIQUIDATED_POSITIONS ({archivedEvents.length})</h3>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {archivedEvents.map((event, i) => {
+              const renderEvent = (evt: any, isMicro = false) => {
+                const inCount = evt.rsvps?.filter((r: any) => r.status === 'long').length || 0;
+                const outCount = evt.rsvps?.filter((r: any) => r.status === 'short').length || 0;
+                const totalCost = evt.expenses?.reduce((sum: number, exp: any) => sum + exp.totalAmount, 0) || 0;
+                
+                return (
+                  <div key={evt.id || i} className={`border-l-2 ${isMicro ? 'border-accent/10 ml-4 mt-3' : 'border-accent/20'} pl-3 mb-2`}>
+                    <p className="font-bold text-secondary text-sm">{evt.title}</p>
+                    <p className="text-tertiary">
+                      {new Date(evt.createdAt).toLocaleDateString()} · @{evt.creator?.username || 'unknown'}
+                    </p>
+                    
+                    {evt.location && <p className="text-tertiary mt-1">Loc: {evt.location}</p>}
+                    {evt.notes && <p className="text-tertiary mt-1 italic">"{evt.notes}"</p>}
+                    
+                    <div className="flex gap-4 mt-2 text-xs">
+                      <span className="text-profit">{inCount} IN</span>
+                      <span className="text-loss">{outCount} OUT</span>
+                      {totalCost > 0 && <span className="text-warning">Cost: ₹{totalCost.toLocaleString('en-IN')}</span>}
+                      {evt.vaultMedia?.length > 0 && <span className="text-accent">{evt.vaultMedia.length} Media</span>}
+                    </div>
+
+                    {evt.rsvps && evt.rsvps.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-mono">
+                        {evt.rsvps.map((r: any) => (
+                          <span key={r.id} className={r.status === 'long' ? 'text-profit' : r.status === 'short' ? 'text-loss' : 'text-tertiary'}>
+                            @{r.user?.username}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {evt.microEvents && evt.microEvents.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[10px] uppercase text-muted-foreground mb-1 tracking-widest">nested_events</p>
+                        {evt.microEvents.map((me: any) => renderEvent(me, true))}
+                      </div>
+                    )}
+                  </div>
+                )
+              };
+
+              return renderEvent(event);
+            })}
+          </div>
+        </div>
+      )}
 
       {media.length > 0 && (
         <div className="border border-accent/30 bg-background/50 p-4">

@@ -59,6 +59,7 @@ export function SaturoLogin() {
           <HostileDrift>
             <div className="border border-profit/40 bg-card p-2">
               <SignIn
+                routing="hash"
                 forceRedirectUrl="/hub"
                 fallbackRedirectUrl="/hub"
                 appearance={{

@@ -15,7 +15,7 @@ export default async function ArcadePage() {
           DERIVATIVES_LAB // AI_ARCADE
         </h1>
         <p className="mt-1 font-mono text-xs text-muted-foreground">
-          describe a game. gemini compiles it. the wing competes on it.
+          describe a game. mistral compiles it. the wing competes on it.
         </p>
       </div>
       <ArcadeConsole

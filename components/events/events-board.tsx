@@ -2,13 +2,19 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { AddExpenseForm } from './add-expense-form'
 import {
   createEvent,
   deleteEvent,
   setRsvp,
   createPoll,
   votePoll,
+  addMicroEvent,
+  archiveEvent,
 } from '@/lib/actions/events'
+import { addExpense, deleteExpense } from '@/lib/actions/expenses'
+import { saveVaultMedia } from '@/lib/actions/vault'
+import { CldUploadWidget } from 'next-cloudinary'
 import { CandlestickButton } from '@/components/candlestick-button'
 import { toast as terminalToast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
@@ -48,8 +54,15 @@ interface WingEvent {
   createdBy: string
   creator: Member
   rsvps: Rsvp[]
-  microEvents: { id: string; title: string; location: string; locationCustom: string | null }[]
+  microEvents: {
+    id: string
+    title: string
+    location: string
+    locationCustom: string | null
+    expenses: any[]
+  }[]
   polls: Poll[]
+  expenses: any[]
 }
 
 const LOCATION_LABELS: Record<string, string> = {
@@ -271,8 +284,102 @@ function AddPollForm({ eventId }: { eventId: string }) {
   )
 }
 
+// ─── Add MicroEvent Form ───
+function AddMicroEventForm({ parentEventId }: { parentEventId: string }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [location, setLocation] = useState('rehdi')
+  const [pending, startTransition] = useTransition()
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 font-mono text-[10px] text-muted-foreground underline-offset-2 hover:text-accent hover:underline"
+      >
+        + add_sub_position
+      </button>
+    )
+  }
+
+  return (
+    <form
+      className="mt-2 flex flex-col gap-2 rounded border border-border/60 p-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!title.trim()) return terminalToast('Needs a title.', 'error')
+        startTransition(async () => {
+          await addMicroEvent(parentEventId, { title, location })
+          setOpen(false)
+          setTitle('')
+          terminalToast('Sub position added.')
+        })
+      }}
+    >
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="micro event title"
+        className="rounded border border-input bg-background px-2 py-1.5 font-mono text-xs"
+        required
+      />
+      <select
+        value={location}
+        onChange={(e) => setLocation(e.target.value)}
+        className="rounded border border-input bg-background px-2 py-1.5 font-mono text-xs"
+      >
+        {Object.entries(LOCATION_LABELS).map(([k, v]) => (
+          <option key={k} value={k}>{v}</option>
+        ))}
+      </select>
+      <div className="flex justify-end gap-2 mt-1">
+        <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground text-xs font-mono">cancel</button>
+        <button type="submit" disabled={pending} className="text-primary text-xs font-mono bg-primary/20 px-2 py-1 rounded">add</button>
+      </div>
+    </form>
+  )
+}
+
+function ExpenseList({ expenses, currentUserId }: { expenses: any[]; currentUserId: string }) {
+  const [pending, startTransition] = useTransition()
+  if (!expenses?.length) return null
+  
+  return (
+    <ul className="mt-2 flex flex-col gap-1">
+      {expenses.map((ex) => (
+        <li key={ex.id} className="flex items-center justify-between rounded border border-border/40 bg-card/50 px-2 py-1 font-mono text-xs">
+          <span className="flex flex-col gap-0.5">
+            <span className="text-foreground">{ex.title} <span className="text-muted-foreground">by</span> @{ex.payer.username}</span>
+            <span className="text-loss font-bold">₹{ex.totalAmount.toLocaleString('en-IN')}</span>
+          </span>
+          {ex.paidBy === currentUserId && (
+            <button
+              disabled={pending}
+              onClick={() => {
+                if (!confirm('Void this expense?')) return
+                startTransition(async () => {
+                  try {
+                    await deleteExpense(ex.id)
+                    terminalToast('Expense voided.')
+                  } catch (e: any) {
+                    terminalToast(e.message, 'error')
+                  }
+                })
+              }}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              [del]
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 // ─── Event card ───
-function EventCard({ event, currentUserId }: { event: WingEvent; currentUserId: string }) {
+function EventCard({ event, members, currentUserId }: { event: WingEvent; members: Member[]; currentUserId: string }) {
   const [pending, startTransition] = useTransition()
   const isLive =
     event.startsAt &&
@@ -326,21 +433,37 @@ function EventCard({ event, currentUserId }: { event: WingEvent; currentUserId: 
           )}
         </div>
         {event.createdBy === currentUserId && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              if (!confirm('Liquidate this position? This cannot be undone.')) return
-              startTransition(async () => {
-                await deleteEvent(event.id)
-                terminalToast('Position liquidated.', 'error')
-              })
-            }}
-            className="shrink-0 font-mono text-xs text-muted-foreground hover:text-destructive"
-            aria-label={`Delete event ${event.title}`}
-          >
-            [liquidate]
-          </button>
+          <div className="flex shrink-0 flex-col gap-1 items-end">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (!confirm('Liquidate this position? This cannot be undone.')) return
+                startTransition(async () => {
+                  await deleteEvent(event.id)
+                  terminalToast('Position liquidated.', 'error')
+                })
+              }}
+              className="font-mono text-xs text-muted-foreground hover:text-destructive"
+              aria-label={`Delete event ${event.title}`}
+            >
+              [liquidate]
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (!confirm('Liquidate and Vault this position?')) return
+                startTransition(async () => {
+                  await archiveEvent(event.id)
+                  terminalToast('Position vaulted.', 'success')
+                })
+              }}
+              className="font-mono text-xs text-muted-foreground hover:text-profit"
+            >
+              [liquidate & vault]
+            </button>
+          </div>
         )}
       </div>
 
@@ -356,11 +479,69 @@ function EventCard({ event, currentUserId }: { event: WingEvent; currentUserId: 
                 <span className="text-muted-foreground">
                   ({m.location === 'other' ? m.locationCustom : LOCATION_LABELS[m.location]})
                 </span>
+                <details className="mt-1 group">
+                  <summary className="cursor-pointer font-mono text-[10px] text-accent hover:text-accent/80 select-none inline-block">
+                    <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> actions ({m.expenses?.length || 0})
+                  </summary>
+                  <div className="mt-1 pl-2 border-l border-accent/20">
+                    <AddExpenseForm eventId={m.id} members={members} currentUserId={currentUserId} />
+                    <ExpenseList expenses={m.expenses} currentUserId={currentUserId} />
+                  </div>
+                </details>
               </li>
             ))}
           </ul>
         </div>
       )}
+      {(event.category === 'trip' || event.category === 'outing') && (
+        <div className="ml-3">
+          <AddMicroEventForm parentEventId={event.id} />
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-col md:flex-row gap-3 items-start">
+        <details className="group">
+          <summary className="cursor-pointer font-mono text-[10px] uppercase text-accent border border-accent/30 bg-accent/5 px-2 py-1 rounded hover:bg-accent/10 select-none inline-block">
+            <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> EXPENSES ({event.expenses?.length || 0})
+          </summary>
+          <div className="mt-2 flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-3 min-w-[250px]">
+            <AddExpenseForm eventId={event.id} members={members} currentUserId={currentUserId} />
+            <ExpenseList expenses={event.expenses} currentUserId={currentUserId} />
+          </div>
+        </details>
+
+        <details className="group">
+          <summary className="cursor-pointer font-mono text-[10px] uppercase text-profit border border-profit/30 bg-profit/5 px-2 py-1 rounded hover:bg-profit/10 select-none inline-block">
+            <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> VAULT MEDIA
+          </summary>
+          <div className="mt-2 rounded border border-border/40 bg-card/40 p-3">
+            <CldUploadWidget
+              uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ? `preset_${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}` : undefined}
+              onSuccess={async (result: any) => {
+                if (result.info && result.info.secure_url) {
+                  await saveVaultMedia({
+                    cloudinaryUrl: result.info.secure_url,
+                    cloudinaryPublicId: result.info.public_id,
+                    mediaType: result.info.resource_type === 'video' ? 'video' : 'image',
+                    eventId: event.id
+                  });
+                  terminalToast('Media uploaded to vault.', 'success');
+                }
+              }}
+            >
+              {({ open }) => (
+                <button
+                  type="button"
+                  onClick={() => open()}
+                  className="font-mono text-[10px] text-profit border border-profit/30 px-2 py-1 rounded hover:bg-profit/10 select-none"
+                >
+                  + UPLOAD_MEDIA
+                </button>
+              )}
+            </CldUploadWidget>
+          </div>
+        </details>
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <RsvpControls event={event} currentUserId={currentUserId} />
@@ -570,6 +751,7 @@ function CreateEventForm({ onClose }: { onClose: () => void }) {
 // ─── Board ───
 export function EventsBoard({
   events,
+  members,
   currentUserId,
 }: {
   events: WingEvent[]
@@ -597,7 +779,7 @@ export function EventsBoard({
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {events.map((e) => (
-            <EventCard key={e.id} event={e} currentUserId={currentUserId} />
+            <EventCard key={e.id} event={e} members={members} currentUserId={currentUserId} />
           ))}
         </div>
       )}

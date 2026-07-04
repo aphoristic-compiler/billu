@@ -12,10 +12,10 @@ export default async function GamesPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="font-mono text-2xl font-bold text-primary">
-          PERFORMANCE_DESK // GAME_TRACKER
+          WING_SCOREBOARD
         </h1>
         <p className="mt-1 font-mono text-xs text-muted-foreground">
-          every match is a trade. every loss is public record.
+          Track real-life matches, poker nights, and wing rivalries.
         </p>
       </div>
       <GameTracker
