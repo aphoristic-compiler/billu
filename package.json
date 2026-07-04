@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npx drizzle-kit push --force && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "clear-users": "tsx scripts/clear-users.ts"
