@@ -11,6 +11,7 @@ import {
   votePoll,
   addMicroEvent,
   archiveEvent,
+  updateEvent,
 } from '@/lib/actions/events'
 import { addExpense, deleteExpense } from '@/lib/actions/expenses'
 import { saveVaultMedia } from '@/lib/actions/vault'
@@ -381,6 +382,7 @@ function ExpenseList({ expenses, currentUserId }: { expenses: any[]; currentUser
 // ─── Event card ───
 function EventCard({ event, members, currentUserId }: { event: WingEvent; members: Member[]; currentUserId: string }) {
   const [pending, startTransition] = useTransition()
+  const [editing, setEditing] = useState(false)
   const isLive =
     event.startsAt &&
     new Date(event.startsAt) <= new Date() &&
@@ -437,6 +439,14 @@ function EventCard({ event, members, currentUserId }: { event: WingEvent; member
             <button
               type="button"
               disabled={pending}
+              onClick={() => setEditing(!editing)}
+              className="font-mono text-xs text-muted-foreground hover:text-foreground"
+            >
+              [edit]
+            </button>
+            <button
+              type="button"
+              disabled={pending}
               onClick={() => {
                 if (!confirm('Liquidate this position? This cannot be undone.')) return
                 startTransition(async () => {
@@ -466,6 +476,83 @@ function EventCard({ event, members, currentUserId }: { event: WingEvent; member
           </div>
         )}
       </div>
+
+      {editing && (
+        <form
+          className="mt-4 rounded border border-primary/50 bg-card p-3 mb-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const fd = new FormData(e.currentTarget)
+            const title = String(fd.get('title') ?? '').trim()
+            if (!title) {
+              terminalToast('A position needs a name.', 'error')
+              return
+            }
+            startTransition(async () => {
+              try {
+                await updateEvent(event.id, {
+                  title,
+                  description: String(fd.get('description') ?? ''),
+                  category: String(fd.get('category')) as WingEvent['category'],
+                  location: String(fd.get('location')),
+                  locationCustom: String(fd.get('locationCustom') ?? ''),
+                  startsAt: String(fd.get('startsAt') ?? '') || undefined,
+                })
+                terminalToast('Position revised.')
+                setEditing(false)
+              } catch (e: any) {
+                terminalToast(e.message, 'error')
+              }
+            })
+          }}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 font-mono text-xs">
+              <span className="text-muted-foreground">title</span>
+              <input name="title" defaultValue={event.title} required className="rounded border border-input bg-background px-2 py-1.5" />
+            </label>
+            <label className="flex flex-col gap-1 font-mono text-xs">
+              <span className="text-muted-foreground">category</span>
+              <select name="category" defaultValue={event.category} className="rounded border border-input bg-background px-2 py-1.5">
+                <option value="treat">treat</option>
+                <option value="dinner">dinner</option>
+                <option value="game">game night</option>
+                <option value="outing">outing</option>
+                <option value="trip">trip</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 font-mono text-xs">
+              <span className="text-muted-foreground">location</span>
+              <select name="location" defaultValue={event.location} className="rounded border border-input bg-background px-2 py-1.5">
+                {Object.entries(LOCATION_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 font-mono text-xs">
+              <span className="text-muted-foreground">custom location (if other)</span>
+              <input name="locationCustom" defaultValue={event.locationCustom || ''} className="rounded border border-input bg-background px-2 py-1.5" />
+            </label>
+            <label className="flex flex-col gap-1 font-mono text-xs">
+              <span className="text-muted-foreground">starts at</span>
+              <input 
+                name="startsAt" 
+                type="datetime-local" 
+                defaultValue={event.startsAt ? new Date(new Date(event.startsAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                className="rounded border border-input bg-background px-2 py-1.5" 
+              />
+            </label>
+            <label className="flex flex-col gap-1 font-mono text-xs sm:col-span-2">
+              <span className="text-muted-foreground">description</span>
+              <textarea name="description" rows={2} defaultValue={event.description || ''} className="rounded border border-input bg-background px-2 py-1.5" />
+            </label>
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-3">
+            <button type="button" onClick={() => setEditing(false)} className="font-mono text-xs text-muted-foreground hover:text-foreground">abort</button>
+            <CandlestickButton type="submit" loading={pending}>SAVE_CHANGES</CandlestickButton>
+          </div>
+        </form>
+      )}
 
       {event.microEvents.length > 0 && (
         <div className="mt-3 border-l-2 border-primary/40 pl-3">

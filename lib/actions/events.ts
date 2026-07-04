@@ -70,6 +70,43 @@ export async function createEvent(input: {
   return event
 }
 
+export async function updateEvent(eventId: string, input: {
+  title: string
+  description?: string
+  category: 'treat' | 'dinner' | 'game' | 'outing' | 'trip'
+  location: string
+  locationCustom?: string
+  startsAt?: string
+}) {
+  const user = await requireDbUser()
+  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+  
+  if (!event) throw new Error('Event not found')
+  if (event.createdBy !== user.id) throw new Error('Only the creator can edit this event.')
+
+  const [updated] = await db.update(events)
+    .set({
+      title: input.title,
+      description: input.description || null,
+      category: input.category as any,
+      location: input.location as any,
+      locationCustom: input.locationCustom || null,
+      startsAt: input.startsAt ? new Date(input.startsAt) : null,
+    })
+    .where(eq(events.id, eventId))
+    .returning()
+
+  await logActivity(
+    user.id,
+    'event_updated',
+    `[EDIT] ${tickerize(input.title)} terms revised by @${user.username}`
+  )
+
+  revalidatePath('/hub')
+  revalidatePath('/hub/events')
+  return updated
+}
+
 export async function deleteEvent(eventId: string) {
   const user = await requireDbUser()
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
