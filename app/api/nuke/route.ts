@@ -1,10 +1,18 @@
 import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { clerkClient } from '@clerk/nextjs/server'
 
 export async function GET() {
   try {
-    // Truncate all user-generated data tables
+    // 1. Delete all Clerk users
+    const client = await clerkClient()
+    const clerkUsers = await client.users.getUserList()
+    for (const u of clerkUsers.data) {
+      await client.users.deleteUser(u.id)
+    }
+
+    // 2. Truncate all user-generated data tables
     // We use CASCADE so we don't have to worry about foreign key constraint order,
     // though listing them all here is safe.
     await db.execute(sql`
