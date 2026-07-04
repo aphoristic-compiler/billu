@@ -84,7 +84,7 @@ export default function LedgerPage() {
                   <p className="text-secondary">{debt.status.toUpperCase()}</p>
                   <p className="text-accent">{Math.abs(debt.amount).toFixed(2)}</p>
                   <p className="text-tertiary">
-                    {debt.fromUser === user.id ? `YOU→${debt.toUser}` : `${debt.fromUser}→YOU`}
+                    {debt.fromUser === user.id ? `YOU→@${debt.creditor?.username || '??'}` : `@${debt.debtor?.username || '??'}→YOU`}
                   </p>
                   {debt.note && <p className="text-tertiary italic">{debt.note}</p>}
                 </div>

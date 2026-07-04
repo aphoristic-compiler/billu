@@ -1,0 +1,1 @@
+import { config } from 'dotenv'; config({ path: '.env.local' }); import { db } from './lib/db'; import { events } from './lib/db/schema'; async function test() { try { const res = await db.select().from(events).limit(1); console.log('success'); } catch(e) { console.error('error:', e.message); } process.exit(0); } test();  

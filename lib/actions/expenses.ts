@@ -207,7 +207,69 @@ export async function getDebts() {
   const user = await requireDbUser()
   return await db.query.debts.findMany({
     where: (d) => or(eq(d.fromUser, user.id), eq(d.toUser, user.id)),
+    with: { debtor: true, creditor: true },
   })
+}
+
+export async function updateExpense(input: {
+  expenseId: string
+  title: string
+  totalAmount: number
+  splits: { userId: string; amount: number }[]
+}) {
+  const user = await requireDbUser()
+
+  const [expense] = await db.select().from(expenses).where(eq(expenses.id, input.expenseId)).limit(1)
+  if (!expense) throw new Error('Expense not found')
+  if (expense.paidBy !== user.id) throw new Error('Only the payer can edit this expense')
+
+  // Check if any debts from this expense have been settled
+  const relatedDebts = await db.select().from(debts).where(eq(debts.expenseId, input.expenseId))
+  const hasSettled = relatedDebts.some(d => d.status === 'settled')
+  if (hasSettled) throw new Error('Cannot edit: some debts from this expense are already settled')
+
+  // Update the expense
+  await db.update(expenses).set({
+    title: input.title,
+    totalAmount: input.totalAmount,
+    updatedAt: new Date(),
+  }).where(eq(expenses.id, input.expenseId))
+
+  // Delete old splits and debts, re-insert
+  await db.delete(expenseSplits).where(eq(expenseSplits.expenseId, input.expenseId))
+  await db.delete(debts).where(eq(debts.expenseId, input.expenseId))
+
+  await db.insert(expenseSplits).values(
+    input.splits.map((s) => ({
+      expenseId: input.expenseId,
+      userId: s.userId,
+      amount: s.amount,
+    })),
+  )
+
+  const newDebts = input.splits
+    .filter((s) => s.userId !== expense.paidBy && s.amount > 0)
+    .map((s) => ({
+      fromUser: s.userId,
+      toUser: expense.paidBy,
+      amount: s.amount,
+      expenseId: input.expenseId,
+    }))
+
+  if (newDebts.length > 0) {
+    await db.insert(debts).values(newDebts)
+  }
+
+  await logActivity(
+    user.id,
+    'expense_updated',
+    `[AMEND] ₹${input.totalAmount.toLocaleString('en-IN')} exposure modified by @${user.username} — ${input.title}`,
+  )
+
+  revalidatePath('/hub')
+  revalidatePath('/hub/ledger')
+  revalidatePath('/hub/events')
+  return { success: true }
 }
 
 export async function getExpenses() {

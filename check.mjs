@@ -1,0 +1,1 @@
+import { config } from 'dotenv'; config({ path: '.env.local' }); import postgres from 'postgres'; const sql = postgres(process.env.DATABASE_URL); async function check() { const res = await sqlSELECT column_name FROM information_schema.columns WHERE table_name='events'; console.log(res.map(r =; process.exit(0); } check();  
