@@ -502,6 +502,7 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
             📍 {event.location === 'other' ? event.locationCustom : LOCATION_LABELS[event.location]}
             {event.startsAt &&
               ` · ${new Date(event.startsAt).toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
                 weekday: 'short',
                 day: 'numeric',
                 month: 'short',
