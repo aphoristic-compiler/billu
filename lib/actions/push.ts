@@ -41,9 +41,9 @@ export async function saveSubscription(userId: string, subscription: any) {
 }
 
 export async function broadcastToWing(title: string, body: string, url: string = "/hub") {
-  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     console.warn("VAPID keys not configured, skipping broadcast")
-    return { success: false }
+    return { success: false, error: "VAPID keys are missing in Vercel environment." }
   }
 
   try {
