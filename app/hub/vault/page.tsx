@@ -123,7 +123,7 @@ export default function VaultPage() {
                         {evt.expenses.map((exp: any) => (
                           <div key={exp.id} className="text-xs flex flex-col sm:flex-row sm:justify-between py-1 border-b border-accent/10 last:border-0 gap-1 sm:gap-2">
                             <span className="truncate pr-2 font-medium">{exp.title}</span>
-                            <span className="text-warning whitespace-nowrap shrink-0">₹{exp.amount} <span className="text-muted-foreground">(by @{exp.payer?.username})</span></span>
+                            <span className="text-warning whitespace-nowrap shrink-0">₹{exp.totalAmount} <span className="text-muted-foreground">(by @{exp.payer?.username})</span></span>
                           </div>
                         ))}
                       </div>
