@@ -523,8 +523,12 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
             onClick={() => {
               startTransition(async () => {
                 try {
-                  await toggleEventPin(event.id)
-                  terminalToast(event.isPinned ? 'Position removed from watchlist.' : 'Position added to watchlist.')
+                  const res = await toggleEventPin(event.id)
+                  if (res && res.error) {
+                    terminalToast(res.error, 'error')
+                  } else {
+                    terminalToast(event.isPinned ? 'Position removed from watchlist.' : 'Position added to watchlist.')
+                  }
                 } catch (e: any) {
                   terminalToast(e.message, 'error')
                 }

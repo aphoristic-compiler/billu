@@ -94,13 +94,14 @@ export async function togglePollPin(pollId: string) {
     const pinnedPolls = await db.select().from(polls).where(eq(polls.isPinned, true))
     const totalCount = pinnedEvents.length + pinnedPolls.length
     if (totalCount >= 3) {
-      throw new Error("Margin limit reached: Can't invest further, already diversified in 3 watched positions.")
+      return { error: "Margin limit reached: Can't invest further, already diversified in 3 watched positions." }
     }
   }
 
   await db.update(polls).set({ isPinned: !poll.isPinned }).where(eq(polls.id, pollId))
   revalidatePath('/hub/surveys')
   revalidatePath('/hub')
+  return { success: true }
 }
 
 export async function deletePoll(pollId: string) {

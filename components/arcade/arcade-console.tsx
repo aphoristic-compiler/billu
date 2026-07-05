@@ -40,6 +40,7 @@ const SUGGESTIONS = [
 export function ArcadeConsole({
   active,
   leaderboard,
+  globalLeaderboard,
   currentUserId,
 }: {
   active: ArcadeGame | null

@@ -389,14 +389,14 @@ export async function toggleEventPin(eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
   if (!event) return
 
-  if (!event.isPinned) {
-    const pinnedEvents = await db.select().from(events).where(eq(events.isPinned, true))
-    const pinnedPolls = await db.select().from(polls).where(eq(polls.isPinned, true))
-    const totalCount = pinnedEvents.length + pinnedPolls.length
-    if (totalCount >= 3) {
-      throw new Error("Margin limit reached: Can't invest further, already diversified in 3 watched positions.")
+    if (!event.isPinned) {
+      const pinnedEvents = await db.select().from(events).where(eq(events.isPinned, true))
+      const pinnedPolls = await db.select().from(polls).where(eq(polls.isPinned, true))
+      const totalCount = pinnedEvents.length + pinnedPolls.length
+      if (totalCount >= 3) {
+        return { error: "Margin limit reached: Can't invest further, already diversified in 3 watched positions." }
+      }
     }
-  }
 
   await db.update(events).set({ isPinned: !event.isPinned }).where(eq(events.id, eventId))
   

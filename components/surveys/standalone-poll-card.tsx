@@ -62,8 +62,12 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
               onClick={() => {
                 startTransition(async () => {
                   try {
-                    await togglePollPin(poll.id)
-                    toast(poll.isPinned ? 'Survey removed from watchlist.' : 'Survey added to watchlist.')
+                    const res = await togglePollPin(poll.id)
+                    if (res && res.error) {
+                      toast(res.error, 'error')
+                    } else {
+                      toast(poll.isPinned ? 'Survey removed from watchlist.' : 'Survey added to watchlist.')
+                    }
                   } catch (e: any) {
                     toast(e.message, 'error')
                   }
