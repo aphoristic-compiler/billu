@@ -339,6 +339,7 @@ export const rsvpsRelations = relations(rsvps, ({ one }) => ({
 
 export const pollsRelations = relations(polls, ({ one, many }) => ({
   event: one(events, { fields: [polls.eventId], references: [events.id] }),
+  creator: one(users, { fields: [polls.createdBy], references: [users.id] }),
   options: many(pollOptions),
 }))
 
