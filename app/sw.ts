@@ -32,6 +32,8 @@ self.addEventListener("push", (event) => {
       icon: icon || "/terminal-icon.png",
       badge: "/terminal-icon.png",
       vibrate: [200, 100, 200, 100, 200, 100, 200],
+      requireInteraction: true,
+      tag: "wing-alert",
       data: { url },
     })
   );

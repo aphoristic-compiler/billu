@@ -471,12 +471,19 @@ export async function blastEventToWing(eventId: string) {
   const typeStr = isMicro ? 'microevent (sub-position)' : 'event/trip'
   
   const longs = event.rsvps?.filter((r: any) => r.status === 'long').map((r: any) => r.user?.username).join(', ') || 'None'
+  const startsAtStr = event.startsAt ? new Date(event.startsAt).toLocaleString() : 'TBD'
   
-  const prompt = `You are the chaotic AI terminal of the Wing. Generate a savage push notification to blast out to all members about an upcoming ${typeStr}.
-Title: ${event.title}
-Created by: ${event.creator?.username}
-Currently going LONG (attending): ${longs}
-Format the response strictly as JSON with 'title' (max 40 chars) and 'body' (max 120 chars, savage and terminal-themed).`
+  const prompt = `You are the sleek, cybernetic AI terminal of the Wing. Generate a cool, witty push notification to alert members about an upcoming ${typeStr}.
+Event Title: ${event.title}
+Start Time: ${startsAtStr}
+Created by: @${event.creator?.username}
+Going LONG: ${longs}
+
+Rules:
+- DO NOT hallucinate or make up random times (like "0700 HRS"). Use only the Start Time provided.
+- Avoid ALL CAPS. Use sleek, clean Title Case or sentence case.
+- Be witty and hacker-themed, but don't overdo the military vibe.
+- Format strictly as JSON with 'title' (max 40 chars) and 'body' (max 100 chars).`
 
   try {
     const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id)
