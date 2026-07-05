@@ -301,11 +301,11 @@ export function AddExpenseForm({
         </div>
       </div>
 
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex">
         <CandlestickButton
           type="submit"
           isLoading={pending}
-          className="!border-loss !text-loss hover:!bg-loss/10 px-4 py-2"
+          className="!border-loss !text-loss hover:!bg-loss/10 px-4 py-2 w-full max-w-full overflow-hidden"
         >
           {pending ? 'PROCESSING...' : (initialExpense ? 'UPDATE_EXPENSE' : 'COMMIT_EXPENSE')}
         </CandlestickButton>
