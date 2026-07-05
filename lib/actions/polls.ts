@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { eq, desc, and, isNull } from 'drizzle-orm'
 import { db, polls, pollOptions, pollVotes, events } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
+import { logActivity } from '@/lib/activity'
 
 export async function getStandalonePolls() {
   const allPolls = await db.query.polls.findMany({
@@ -183,4 +184,6 @@ export async function blastPollToWing(pollId: string) {
   
   const [title, body] = (response?.content || 'NEW SURVEY|A new survey is available.').split('|');
   await broadcastToWing(title.trim(), body?.trim() || 'Vote now.');
+  
+  await logActivity(poll.createdBy, 'poll_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED FOR SURVEY: "${poll.question}"`)
 }
