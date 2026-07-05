@@ -18,7 +18,7 @@ export function AddExpenseForm({
   members,
   currentUserId,
 }: {
-  eventId: string
+  eventId?: string
   members: Member[]
   currentUserId: string
 }) {

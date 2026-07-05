@@ -1,7 +1,7 @@
 'use server'
 
-import { db, activityLog, debts, expenses, users, events } from '@/lib/db'
-import { eq, or, desc, sql } from 'drizzle-orm'
+import { db, activityLog, debts, expenses, users, events, polls, pollOptions } from '@/lib/db'
+import { eq, or, desc, sql, isNull } from 'drizzle-orm'
 import { requireDbUser } from '@/lib/auth'
 
 export async function getDashboardData() {
@@ -102,6 +102,32 @@ export async function getDashboardData() {
     expenses: e.expenses || [],
   }))
 
+  // Fetch pinned standalone polls
+  const pinnedPollsTopLevel = await db.query.polls.findMany({
+    where: (p) => eq(p.isPinned, true),
+    orderBy: [desc(polls.createdAt)],
+    limit: 3,
+    with: {
+      creator: true,
+      options: {
+        orderBy: [pollOptions.sortOrder],
+        with: { votes: { with: { user: true } } },
+      },
+    },
+  })
+  
+  const pinnedPolls = pinnedPollsTopLevel.map((p) => ({
+    id: p.id,
+    question: p.question,
+    isPinned: p.isPinned,
+    creator: p.creator ? { username: p.creator.username } : null,
+    options: p.options.map(o => ({
+      id: o.id,
+      label: o.label,
+      votes: o.votes.map(v => ({ userId: v.userId }))
+    }))
+  }))
+
   return {
     recentActivity,
     netBalance,
@@ -109,5 +135,6 @@ export async function getDashboardData() {
     totalUserOwes,
     user,
     pinnedEvents,
+    pinnedPolls,
   }
 }

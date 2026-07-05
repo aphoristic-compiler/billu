@@ -15,6 +15,13 @@
       "when": 1783172793680,
       "tag": "0001_stiff_skin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783219281821,
+      "tag": "0002_tearful_forgotten_one",
+      "breakpoints": true
     }
   ]
 }

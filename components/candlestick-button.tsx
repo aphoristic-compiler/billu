@@ -124,16 +124,16 @@ export function CandlestickButton({
       type={type}
       onClick={handleClick}
       disabled={disabled || busy}
-      className={`group flex items-center justify-center gap-3 border px-4 py-2 font-mono text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`group flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 border px-4 py-3 sm:py-2 font-mono text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 w-full sm:w-auto ${
         effectiveGreen
           ? 'border-profit text-profit hover:bg-profit/10'
           : 'border-loss text-loss hover:bg-loss/10'
       } ${className}`}
     >
-      <canvas ref={canvasRef} width={120} height={40} aria-hidden="true" />
-      <span className="whitespace-nowrap">
-        {busy ? 'EXECUTING...' : (label ?? children)}
-        <span className="ml-2 text-xs opacity-70">
+      <canvas ref={canvasRef} width={120} height={40} className="max-w-[120px]" aria-hidden="true" />
+      <span className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 text-center">
+        <span className="whitespace-normal leading-tight">{busy ? 'EXECUTING...' : (label ?? children)}</span>
+        <span className="text-[10px] sm:text-xs opacity-70 whitespace-nowrap mt-1 sm:mt-0">
           {effectiveGreen ? '[MARKET: GREEN]' : '[MARKET: RED]'}
         </span>
       </span>

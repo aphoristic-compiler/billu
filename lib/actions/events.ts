@@ -1,8 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { and, desc, eq, isNull } from 'drizzle-orm'
-import { db, events, rsvps, polls, pollOptions, pollVotes, users } from '@/lib/db'
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { db, events, rsvps, polls, pollOptions, pollVotes, users, expenses, debts } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 
@@ -112,9 +112,26 @@ export async function deleteEvent(eventId: string) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
   if (!event) return
   if (event.createdBy !== user.id) throw new Error('Only the creator can liquidate this position.')
-  // delete micro-events first
+  
+  if (event.isArchived) {
+    throw new Error('Vaulted positions are memorialized and cannot be liquidated.')
+  }
+
+  // 1. Delete associated expenses and debts (Cascade)
+  const eventExpenses = await db.select({ id: expenses.id }).from(expenses).where(eq(expenses.eventId, eventId))
+  const expenseIds = eventExpenses.map((e: any) => e.id)
+  
+  if (expenseIds.length > 0) {
+    await db.delete(debts).where(inArray(debts.expenseId, expenseIds))
+    await db.delete(expenses).where(inArray(expenses.id, expenseIds))
+  }
+
+  // 2. delete micro-events first
   await db.delete(events).where(eq(events.parentEventId, eventId))
+  
+  // 3. delete the event itself
   await db.delete(events).where(eq(events.id, eventId))
+  
   await logActivity(user.id, 'event_deleted', `[CLOSE] ${tickerize(event.title)} position closed by @${user.username}`)
   revalidatePath('/hub')
   revalidatePath('/hub/events')

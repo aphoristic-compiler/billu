@@ -3,7 +3,7 @@ import { getCurrentDbUser } from '@/lib/auth'
 import { ArcadeConsole } from '@/components/arcade/arcade-console'
 
 export default async function ArcadePage() {
-  const [{ active, leaderboard }, me] = await Promise.all([
+  const [{ active, leaderboard, globalLeaderboard }, me] = await Promise.all([
     getArcadeData(),
     getCurrentDbUser(),
   ])
@@ -21,6 +21,7 @@ export default async function ArcadePage() {
       <ArcadeConsole
         active={active ? JSON.parse(JSON.stringify(active)) : null}
         leaderboard={JSON.parse(JSON.stringify(leaderboard))}
+        globalLeaderboard={JSON.parse(JSON.stringify(globalLeaderboard))}
         currentUserId={me?.id ?? ''}
       />
     </div>

@@ -42,6 +42,7 @@ export function ArcadeConsole({
 }: {
   active: ArcadeGame | null
   leaderboard: LeaderboardRow[]
+  globalLeaderboard?: { userId: string; username: string; totalScore: number }[]
   currentUserId: string
 }) {
   const router = useRouter()
@@ -222,60 +223,110 @@ export function ArcadeConsole({
         </section>
       )}
 
-      {/* Leaderboard */}
+      {/* Leaderboard Section */}
       {active && (
-        <section className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-4 border-b border-border/50 pb-3">
-            <Trophy size={16} className="text-warning" />
-            <h2 className="font-mono text-sm font-bold text-foreground tracking-widest">HIGH_SCORE.DAT</h2>
-          </div>
-          
-          {leaderboard.length === 0 ? (
-            <div className="py-8 text-center border border-dashed border-border/50 rounded bg-background/30">
-              <p className="font-mono text-xs text-muted-foreground">Nobody has scored yet.</p>
-              <p className="font-mono text-[10px] text-muted-foreground/60 mt-1">Be the first to set the bar.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <section className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 mb-4 border-b border-border/50 pb-3">
+              <Trophy size={16} className="text-warning" />
+              <h2 className="font-mono text-sm font-bold text-foreground tracking-widest">HIGH_SCORE.DAT (CURRENT)</h2>
             </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {leaderboard.map((row, i) => (
-                <div
-                  key={row.id}
-                  className={cn(
-                    'group flex items-center justify-between rounded px-3 py-2.5 font-mono text-xs transition-colors',
-                    row.userId === currentUserId 
-                      ? 'bg-accent/10 border-l-2 border-accent text-accent' 
-                      : 'bg-background/40 hover:bg-background/80 border-l-2 border-transparent hover:border-border',
-                  )}
-                >
-                  <div className="flex items-center gap-4">
-                    <span className={cn(
-                      'w-6 text-center font-bold', 
-                      i === 0 ? 'text-warning text-lg' : i === 1 ? 'text-[#C0C0C0]' : i === 2 ? 'text-[#CD7F32]' : 'text-muted-foreground'
-                    )}>
-                      {i === 0 ? '🏆' : `#${i + 1}`}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-bold tracking-tight">@{row.user.username}</span>
-                      {row.userId === currentUserId && <span className="text-[9px] bg-accent/20 px-1.5 py-0.5 rounded text-accent uppercase">You</span>}
-                    </span>
+            
+            {leaderboard.length === 0 ? (
+              <div className="py-8 text-center border border-dashed border-border/50 rounded bg-background/30">
+                <p className="font-mono text-xs text-muted-foreground">Nobody has scored yet.</p>
+                <p className="font-mono text-[10px] text-muted-foreground/60 mt-1">Be the first to set the bar.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {leaderboard.map((row, i) => (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      'group flex items-center justify-between rounded px-3 py-2.5 font-mono text-xs transition-colors',
+                      row.userId === currentUserId 
+                        ? 'bg-accent/10 border-l-2 border-accent text-accent' 
+                        : 'bg-background/40 hover:bg-background/80 border-l-2 border-transparent hover:border-border',
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className={cn(
+                        'w-6 text-center font-bold', 
+                        i === 0 ? 'text-warning text-lg' : i === 1 ? 'text-[#C0C0C0]' : i === 2 ? 'text-[#CD7F32]' : 'text-muted-foreground'
+                      )}>
+                        {i === 0 ? '🏆' : `#${i + 1}`}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-bold tracking-tight">@{row.user.username}</span>
+                        {row.userId === currentUserId && <span className="text-[9px] bg-accent/20 px-1.5 py-0.5 rounded text-accent uppercase">You</span>}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-6 text-right">
+                      <span className="text-[10px] text-muted-foreground hidden sm:inline-block">
+                        {row.attempts} {row.attempts === 1 ? 'run' : 'runs'}
+                      </span>
+                      <span className={cn(
+                        "font-bold tabular-nums text-sm",
+                        i === 0 ? "text-warning drop-shadow-sm" : row.userId === currentUserId ? "text-profit" : "text-foreground"
+                      )}>
+                        {row.score.toLocaleString('en-IN')}
+                      </span>
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center gap-6 text-right">
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline-block">
-                      {row.attempts} {row.attempts === 1 ? 'run' : 'runs'}
-                    </span>
-                    <span className={cn(
-                      "font-bold tabular-nums text-sm",
-                      i === 0 ? "text-warning drop-shadow-sm" : row.userId === currentUserId ? "text-profit" : "text-foreground"
-                    )}>
-                      {row.score.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 mb-4 border-b border-border/50 pb-3">
+              <Trophy size={16} className="text-profit" />
+              <h2 className="font-mono text-sm font-bold text-foreground tracking-widest">GLOBAL_RANKING.DAT (ALL-TIME)</h2>
             </div>
-          )}
-        </section>
+            
+            {!globalLeaderboard || globalLeaderboard.length === 0 ? (
+              <div className="py-8 text-center border border-dashed border-border/50 rounded bg-background/30">
+                <p className="font-mono text-xs text-muted-foreground">No data available.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {globalLeaderboard.map((row, i) => (
+                  <div
+                    key={row.userId}
+                    className={cn(
+                      'group flex items-center justify-between rounded px-3 py-2.5 font-mono text-xs transition-colors',
+                      row.userId === currentUserId 
+                        ? 'bg-profit/10 border-l-2 border-profit text-profit' 
+                        : 'bg-background/40 hover:bg-background/80 border-l-2 border-transparent hover:border-border',
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className={cn(
+                        'w-6 text-center font-bold', 
+                        i === 0 ? 'text-profit text-lg' : 'text-muted-foreground'
+                      )}>
+                        {i === 0 ? '🏆' : `#${i + 1}`}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-bold tracking-tight">@{row.username}</span>
+                        {row.userId === currentUserId && <span className="text-[9px] bg-profit/20 px-1.5 py-0.5 rounded text-profit uppercase">You</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-right">
+                      <span className={cn(
+                        "font-bold tabular-nums text-sm",
+                        i === 0 ? "text-profit drop-shadow-sm" : row.userId === currentUserId ? "text-profit" : "text-foreground"
+                      )}>
+                        {row.totalScore.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       )}
     </div>
   )

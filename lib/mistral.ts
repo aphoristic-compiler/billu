@@ -1,4 +1,4 @@
-export async function queryMistral(messages: any[], userId: string) {
+export async function queryMistral(messages: any[], userId: string, tools?: any[]) {
   const keysEnv = process.env.MISTRAL_API_KEYS || '';
   const keys = keysEnv.split(',').map(k => k.trim()).filter(Boolean);
   
@@ -27,6 +27,7 @@ export async function queryMistral(messages: any[], userId: string) {
         body: JSON.stringify({
           model: 'mistral-large-latest',
           messages: messages,
+          ...(tools && tools.length > 0 ? { tools, tool_choice: "auto" } : {})
         }),
       });
 
@@ -40,7 +41,7 @@ export async function queryMistral(messages: any[], userId: string) {
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      return data.choices[0].message;
       
     } catch (error: any) {
       console.warn(`Attempt with key ${keyIndex} failed: ${error.message}`);

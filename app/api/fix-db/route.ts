@@ -18,6 +18,14 @@ export async function GET() {
     await db.execute(sql`
       ALTER TABLE "events" DROP COLUMN IF EXISTS "notes";
     `)
+
+    // Polls migration
+    await db.execute(sql`
+      ALTER TABLE "polls" ALTER COLUMN "event_id" DROP NOT NULL;
+    `)
+    await db.execute(sql`
+      ALTER TABLE "polls" ADD COLUMN IF NOT EXISTS "is_pinned" boolean NOT NULL DEFAULT false;
+    `)
     
     // Verify it works
     const count = await db.execute(sql`SELECT count(*) FROM "events"`)

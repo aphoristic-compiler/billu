@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getDebts, getExpenses, settleDebts, settleSingleDebt } from '@/lib/actions/expenses';
+import { getMembers } from '@/lib/actions/events';
 import { toast } from '@/components/terminal-toast';
 import { CandlestickButton } from '@/components/candlestick-button';
+import { AddExpenseForm } from '@/components/events/add-expense-form';
 
 export default function LedgerPage() {
   const { user } = useUser();
@@ -12,13 +14,15 @@ export default function LedgerPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [settling, setSettling] = useState(false);
   const [showExpenses, setShowExpenses] = useState(false);
+  const [members, setMembers] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [d, e] = await Promise.all([getDebts(), getExpenses()]);
+      const [d, e, m] = await Promise.all([getDebts(), getExpenses(), getMembers()]);
       setDebts(d);
       setExpenses(e);
+      setMembers(m);
     };
     load();
   }, [user]);
@@ -135,6 +139,11 @@ export default function LedgerPage() {
         </div>
       )}
 
+      {members.length > 0 && (
+        <div className="border border-accent/30 bg-background/50 p-4">
+          <AddExpenseForm members={members} currentUserId={user.id} />
+        </div>
+      )}
 
     </div>
   );

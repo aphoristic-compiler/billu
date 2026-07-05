@@ -112,12 +112,13 @@ export const rsvps = pgTable(
 export const polls = pgTable("polls", {
   id: uuid("id").primaryKey().defaultRandom(),
   eventId: uuid("event_id")
-    .notNull()
     .references(() => events.id, { onDelete: "cascade" }),
   question: text("question").notNull(),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
+  isPinned: boolean("is_pinned").notNull().default(false),
+  isArchived: boolean("is_archived").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 })
 

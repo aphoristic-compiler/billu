@@ -1,8 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { desc, eq, and } from 'drizzle-orm'
-import { db, activeArcadeGame, arcadeLeaderboard } from '@/lib/db'
+import { desc, eq, and, sql } from 'drizzle-orm'
+import { db, activeArcadeGame, arcadeLeaderboard, users } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 import { queryMistral } from '@/lib/mistral'
@@ -23,7 +23,27 @@ export async function getArcadeData() {
       })
     : []
 
-  return { active: active ?? null, leaderboard }
+  // Global Leaderboard (Sum of max scores per user across all games)
+  const globalRaw = await db.execute(sql`
+    WITH MaxScores AS (
+      SELECT user_id, arcade_game_id, MAX(score) as max_score
+      FROM arcade_leaderboard
+      GROUP BY user_id, arcade_game_id
+    )
+    SELECT u.id as "userId", u.username, SUM(m.max_score) as "totalScore"
+    FROM MaxScores m
+    JOIN users u ON m.user_id = u.id
+    GROUP BY u.id, u.username
+    ORDER BY "totalScore" DESC
+  `)
+
+  const globalLeaderboard = globalRaw.map((r: any) => ({
+    userId: r.userId,
+    username: r.username,
+    totalScore: Number(r.totalScore),
+  }))
+
+  return { active: active ?? null, leaderboard, globalLeaderboard }
 }
 
 function stripCodeFences(text: string) {

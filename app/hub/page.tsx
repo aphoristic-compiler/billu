@@ -2,6 +2,7 @@ import { getDashboardData } from '@/lib/actions/dashboard'
 import { getDailyBanner } from '@/lib/actions/banner'
 import { getMembers } from '@/lib/actions/events'
 import { EventCard } from '@/components/events/events-board'
+import { StandalonePollCard } from '@/components/surveys/standalone-poll-card'
 import Link from 'next/link'
 import { Activity, Gamepad2, Landmark, Wallet, Vault } from 'lucide-react'
 import { BannerTicker } from '@/components/banner-ticker'
@@ -32,14 +33,17 @@ export default async function HubDashboard() {
       </section>
 
       {/* Watchlist Section */}
-      {data.pinnedEvents && data.pinnedEvents.length > 0 && (
+      {(data.pinnedEvents?.length > 0 || data.pinnedPolls?.length > 0) && (
         <section className="space-y-4">
           <h2 className="font-mono text-lg font-bold text-warning border-b border-warning/50 pb-2">
             WATCHLIST_ASSETS
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.pinnedEvents.map(event => (
+            {data.pinnedEvents?.map(event => (
               <EventCard key={event.id} event={event as any} members={members as any} currentUserId={data.user.id} />
+            ))}
+            {data.pinnedPolls?.map(poll => (
+              <StandalonePollCard key={poll.id} poll={poll as any} currentUserId={data.user.id} />
             ))}
           </div>
         </section>
@@ -56,6 +60,16 @@ export default async function HubDashboard() {
             </div>
             <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
               Manage trips, outings, and micro-events.
+            </p>
+          </Link>
+
+          <Link href="/hub/surveys" className="group p-4 border border-border bg-card rounded-lg hover:border-warning hover:bg-warning/5 transition-all">
+            <div className="flex items-center gap-3 mb-2 text-warning">
+              <Activity size={20} />
+              <h3 className="font-mono text-sm font-bold">MARKET_SURVEYS</h3>
+            </div>
+            <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
+              Vote on standalone wing-wide proposals.
             </p>
           </Link>
 
@@ -85,7 +99,17 @@ export default async function HubDashboard() {
               <h3 className="font-mono text-sm font-bold">VAULT</h3>
             </div>
             <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
-              Memorial vault for wing media and quotes.
+              Access the centralized file system.
+            </p>
+          </Link>
+
+          <Link href="/hub/analytics" className="group p-4 border border-border bg-card rounded-lg hover:border-blue-500 hover:bg-blue-500/5 transition-all">
+            <div className="flex items-center gap-3 mb-2 text-blue-500">
+              <Activity size={20} />
+              <h3 className="font-mono text-sm font-bold">SYSTEM_ANALYTICS</h3>
+            </div>
+            <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
+              Wing-wide metrics and performance tracking.
             </p>
           </Link>
         </div>
