@@ -55,24 +55,6 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
         </div>
         
         <div className="flex shrink-0 flex-col gap-1 items-end self-start">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              startTransition(async () => {
-                try {
-                  await blastPollToWing(poll.id)
-                  toast('Blast sent to all operators.')
-                } catch (e: any) {
-                  toast(e.message, 'error')
-                }
-              })
-            }}
-            className="font-mono text-xs text-muted-foreground hover:text-profit transition-colors whitespace-nowrap"
-            title="Blast Notification to Wing"
-          >
-            [🚀 blast]
-          </button>
           {poll.isPinned !== undefined && (
             <button
               type="button"
@@ -92,6 +74,25 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
               {poll.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
             </button>
           )}
+
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                try {
+                  await blastPollToWing(poll.id)
+                  toast('Blast sent to all operators.')
+                } catch (e: any) {
+                  toast(e.message, 'error')
+                }
+              })
+            }}
+            className="font-mono text-xs text-muted-foreground hover:text-profit transition-colors whitespace-nowrap"
+            title="Blast Notification to Wing"
+          >
+            [🚀 blast]
+          </button>
           
           {isCreator && (
             <>
@@ -101,21 +102,6 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
               >
                 [edit]
               </button>
-              <InlineConfirmButton
-                disabled={pending}
-                onClick={() => startTransition(async () => {
-                  try {
-                    await archivePoll(poll.id)
-                    toast('Survey Vaulted.', 'success')
-                  } catch(e: any) {
-                    toast(e.message, 'error')
-                  }
-                })}
-                idleLabel="[liquidate & vault]"
-                confirmLabel="[CONFIRM_VAULT?]"
-                idleClassName="font-mono text-xs text-muted-foreground hover:text-profit transition-colors"
-                confirmClassName="text-profit font-bold text-xs font-mono"
-              />
               <InlineConfirmButton
                 disabled={pending}
                 onClick={() => startTransition(async () => {
@@ -130,6 +116,21 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
                 confirmLabel="[CONFIRM_LIQUIDATE?]"
                 idleClassName="font-mono text-xs text-muted-foreground hover:text-destructive transition-colors"
                 confirmClassName="text-destructive font-bold text-xs font-mono"
+              />
+              <InlineConfirmButton
+                disabled={pending}
+                onClick={() => startTransition(async () => {
+                  try {
+                    await archivePoll(poll.id)
+                    toast('Survey Vaulted.', 'success')
+                  } catch(e: any) {
+                    toast(e.message, 'error')
+                  }
+                })}
+                idleLabel="[liquidate & vault]"
+                confirmLabel="[CONFIRM_VAULT?]"
+                idleClassName="font-mono text-xs text-muted-foreground hover:text-profit transition-colors"
+                confirmClassName="text-profit font-bold text-xs font-mono"
               />
             </>
           )}
