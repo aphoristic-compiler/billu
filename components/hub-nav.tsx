@@ -23,7 +23,8 @@ export function HubNav({ memberName }: { memberName: string }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+    <>
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-4 py-2">
         <div className="flex items-center gap-3">
           <button 
@@ -72,17 +73,18 @@ export function HubNav({ memberName }: { memberName: string }) {
           )
         })}
       </nav>
+    </header>
 
       {/* Mobile Sidebar */}
       <AnimatePresence>
         {isMobileOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex justify-end">
+          <div className="md:hidden fixed inset-0 z-[100] flex justify-end" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="fixed inset-0 backdrop-blur-md"
+              className="absolute inset-0 backdrop-blur-md"
               style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
               onClick={() => setIsMobileOpen(false)}
             />
@@ -175,6 +177,6 @@ export function HubNav({ memberName }: { memberName: string }) {
           </div>
         )}
       </AnimatePresence>
-    </header>
+    </>
   )
 }
