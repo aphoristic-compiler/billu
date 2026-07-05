@@ -21,6 +21,7 @@ import { saveVaultMedia } from '@/lib/actions/vault'
 import { CldUploadWidget } from 'next-cloudinary'
 import { toast as terminalToast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
+import { CreatePollForm } from '@/components/surveys/create-poll-form'
 
 // ─── Types (serialized from server) ───
 interface Member {
@@ -885,13 +886,14 @@ export function EventsBoard({
       {creating ? (
         <CreateEventForm onClose={() => setCreating(false)} />
       ) : (
-        <div>
+        <div className="flex gap-4">
           <button 
             onClick={() => setCreating(true)}
             className="rounded border border-primary px-4 py-2 font-mono text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
           >
             + OPEN_NEW_POSITION
           </button>
+          <CreatePollForm />
         </div>
       )}
 

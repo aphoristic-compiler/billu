@@ -1,8 +1,11 @@
 'use client'
 
 import { useTransition } from 'react'
-import { voteStandalonePoll, togglePollPin } from '@/lib/actions/polls'
+import { voteStandalonePoll, togglePollPin, deletePoll, archivePoll } from '@/lib/actions/polls'
+import { broadcastToWing } from '@/lib/actions/push'
 import { toast } from '@/components/terminal-toast'
+import { useState } from 'react'
+import { EditPollDialog } from './edit-poll-dialog'
 
 interface PollOption {
   id: string
@@ -20,7 +23,10 @@ interface Poll {
 
 export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; currentUserId: string }) {
   const [pending, startTransition] = useTransition()
+  const [isEditing, setIsEditing] = useState(false)
   const totalVotes = poll.options.reduce((s, o) => s + o.votes.length, 0)
+  
+  const isCreator = poll.creator && poll.creator.username === currentUserId
 
   return (
     <div className="flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-4">
@@ -29,6 +35,29 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
         <div className="flex gap-2">
           {poll.creator && (
             <span className="font-mono text-xs text-muted-foreground">@{poll.creator.username}</span>
+          )}
+          {poll.creator && poll.creator.username === currentUserId && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    await broadcastToWing(
+                      "📊 NEW MARKET SURVEY", 
+                      `@${poll.creator?.username} just dropped a poll: ${poll.question}`
+                    )
+                    toast('Blast sent to all operators.')
+                  } catch (e: any) {
+                    toast(e.message, 'error')
+                  }
+                })
+              }}
+              className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors"
+              title="Blast Notification to Wing"
+            >
+              [🚀 blast]
+            </button>
           )}
           {poll.isPinned !== undefined && (
             <button
@@ -44,13 +73,52 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
                   }
                 })
               }}
-              className="font-mono text-xs text-muted-foreground hover:text-warning"
+              className="font-mono text-xs text-muted-foreground hover:text-warning transition-colors"
             >
               {poll.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
             </button>
           )}
         </div>
       </div>
+      
+      {isCreator && (
+        <div className="flex gap-2 text-xs border-b border-border/50 pb-2 mb-2">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-muted-foreground hover:text-primary transition-colors"
+          >
+            [edit]
+          </button>
+          <button
+            disabled={pending}
+            onClick={() => startTransition(async () => {
+              try {
+                await archivePoll(poll.id)
+                toast('Survey Vaulted.', 'success')
+              } catch(e: any) {
+                toast(e.message, 'error')
+              }
+            })}
+            className="text-muted-foreground hover:text-warning transition-colors"
+          >
+            [vault]
+          </button>
+          <button
+            disabled={pending}
+            onClick={() => startTransition(async () => {
+              try {
+                await deletePoll(poll.id)
+                toast('Survey Liquidated.', 'success')
+              } catch(e: any) {
+                toast(e.message, 'error')
+              }
+            })}
+            className="text-muted-foreground hover:text-destructive transition-colors"
+          >
+            [liquidate]
+          </button>
+        </div>
+      )}
       <div className="mt-2 space-y-2">
         {poll.options.map((opt) => {
           const count = opt.votes.length
@@ -79,6 +147,7 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
           )
         })}
       </div>
+      <EditPollDialog isOpen={isEditing} onClose={() => setIsEditing(false)} poll={poll} />
     </div>
   )
 }

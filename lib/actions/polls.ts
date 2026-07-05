@@ -7,7 +7,7 @@ import { requireDbUser } from '@/lib/auth'
 
 export async function getStandalonePolls() {
   const allPolls = await db.query.polls.findMany({
-    where: isNull(polls.eventId),
+    where: and(isNull(polls.eventId), eq(polls.isArchived, false)),
     orderBy: [desc(polls.createdAt)],
     with: {
       creator: true,
@@ -130,5 +130,36 @@ export async function archivePoll(pollId: string) {
   await db.update(polls).set({ isArchived: true }).where(eq(polls.id, pollId))
   
   revalidatePath('/hub/surveys')
+  revalidatePath('/hub')
+}
+
+export async function editPoll(pollId: string, question: string, options: string[]) {
+  const user = await requireDbUser()
+  const [poll] = await db.select().from(polls).where(eq(polls.id, pollId)).limit(1)
+  
+  if (!poll) throw new Error('Poll not found')
+  if (poll.createdBy !== user.id) throw new Error('Only the creator can edit this poll')
+
+  if (!question.trim()) throw new Error('Question required')
+  const validOptions = options.map(o => o.trim()).filter(Boolean)
+  if (validOptions.length < 2) throw new Error('At least 2 valid options required')
+
+  // Update question
+  await db.update(polls).set({ question }).where(eq(polls.id, pollId))
+
+  // For options, we will wipe existing options and recreate them.
+  // Note: This wipes votes as well. 
+  await db.delete(pollOptions).where(eq(pollOptions.pollId, pollId))
+  
+  await db.insert(pollOptions).values(
+    validOptions.map((label, idx) => ({
+      pollId: poll.id,
+      label,
+      sortOrder: idx,
+    }))
+  )
+
+  revalidatePath('/hub/surveys')
+  revalidatePath('/hub/events')
   revalidatePath('/hub')
 }

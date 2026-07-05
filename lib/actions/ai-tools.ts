@@ -373,6 +373,22 @@ export const aiToolsConfig = [
   {
     type: 'function',
     function: {
+      name: 'edit_poll',
+      description: 'Edits an existing poll (either standalone or attached to an event) by changing the question and completely resetting the options.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pollQuestion: { type: 'string', description: 'Search term for the poll question to edit.' },
+          newQuestion: { type: 'string' },
+          newOptions: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['pollQuestion', 'newQuestion', 'newOptions']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'edit_expense',
       description: 'Edits an existing expense.',
       parameters: {
@@ -395,6 +411,22 @@ export const aiToolsConfig = [
           }
         },
         required: ['expenseId', 'title', 'totalAmount', 'paidBy', 'splits']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'blast_asset',
+      description: 'Blasts (sends a push notification to everyone in the wing) about an event or market survey poll. Used to hype up the wing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          assetName: { type: 'string', description: 'The title/name of the event or poll to blast.' },
+          assetType: { type: 'string', enum: ['event', 'poll'] },
+          hypeMessage: { type: 'string', description: 'A savage, hype-inducing notification body.' }
+        },
+        required: ['assetName', 'assetType', 'hypeMessage']
       }
     }
   }
@@ -429,6 +461,8 @@ export async function executeAiTool(name: string, args: any) {
       case 'delete_poll': return await ai_delete_poll(args);
       case 'vault_poll': return await ai_vault_poll(args);
       case 'pin_poll': return await ai_pin_poll(args);
+      case 'edit_poll': return await ai_edit_poll(args);
+      case 'blast_asset': return await ai_blast_asset(args);
       case 'get_full_leaderboard': return await ai_get_full_leaderboard();
       case 'list_wing_members': return await ai_list_wing_members();
       case 'list_market_surveys': return await ai_list_market_surveys(args);
@@ -915,6 +949,22 @@ async function ai_pin_poll(args: any) {
     await togglePollPin(poll.id);
     const action = !poll.isPinned ? "pinned" : "unpinned";
     return JSON.stringify({ success: true, message: `Poll '${poll.question}' ${action}.` });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_edit_poll(args: any) {
+  try {
+    const poll = await db.query.polls.findFirst({
+      where: ilike(polls.question, `%${args.pollQuestion}%`),
+      orderBy: [desc(polls.createdAt)]
+    });
+    if (!poll) return JSON.stringify({ error: "Poll not found." });
+
+    const { editPoll } = await import('@/lib/actions/polls');
+    await editPoll(poll.id, args.newQuestion, args.newOptions);
+    return JSON.stringify({ success: true, message: `Poll '${args.pollQuestion}' edited successfully.` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }

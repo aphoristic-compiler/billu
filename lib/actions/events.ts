@@ -371,6 +371,8 @@ export async function archiveEvent(eventId: string) {
   await db.update(events).set({ isArchived: true }).where(eq(events.id, eventId))
   // Also archive microevents
   await db.update(events).set({ isArchived: true }).where(eq(events.parentEventId, eventId))
+  // Also archive attached polls
+  await db.update(polls).set({ isArchived: true }).where(eq(polls.eventId, eventId))
   
   await logActivity(user.id, 'event_archived', `[VAULT] ${tickerize(event.title)} vaulted by @${user.username}`)
   revalidatePath('/hub')

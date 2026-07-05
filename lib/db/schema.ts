@@ -420,3 +420,22 @@ export const vaultMediaRelations = relations(vaultMedia, ({ one }) => ({
     references: [events.id],
   }),
 }))
+
+// ─── 22. push_subscriptions ────────────────────────────────────────────────
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+  endpoint: text("endpoint").notNull(),
+  p256dh: varchar("p256dh", { length: 255 }).notNull(),
+  auth: varchar("auth", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+})
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [pushSubscriptions.userId],
+    references: [users.id],
+  }),
+}))

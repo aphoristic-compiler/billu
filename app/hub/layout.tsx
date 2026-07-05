@@ -5,6 +5,7 @@ import { ActivityFeed } from '@/components/activity-feed'
 import { HiddenTerminal } from '@/components/hidden-terminal'
 import { BootGate } from '@/components/boot-gate'
 import { ToastHost } from '@/components/terminal-toast'
+import { PushManager } from '@/components/push-manager'
 
 export default async function HubLayout({
   children,
@@ -25,6 +26,7 @@ export default async function HubLayout({
       </div>
       <HiddenTerminal />
       <ToastHost />
+      <PushManager />
     </BootGate>
   )
 }
