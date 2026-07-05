@@ -14,6 +14,7 @@ async function main() {
   try {
     await sql`ALTER TABLE polls ADD COLUMN IF NOT EXISTS is_archived boolean NOT NULL DEFAULT false;`
     await sql`ALTER TABLE polls ADD COLUMN IF NOT EXISTS is_pinned boolean NOT NULL DEFAULT false;`
+    await sql`ALTER TABLE polls ADD COLUMN IF NOT EXISTS is_anonymous boolean NOT NULL DEFAULT false;`
     await sql`ALTER TABLE polls ALTER COLUMN event_id DROP NOT NULL;`
     await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_pinned boolean NOT NULL DEFAULT false;`
     console.log("Success: Added all columns");
