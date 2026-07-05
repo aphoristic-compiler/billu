@@ -56,8 +56,9 @@ export default function LedgerPage() {
 
   const currentUserId = members.find((m) => m.clerkId === user.id)?.id || '';
 
-  const netBalance = debts
-    .filter((d) => d.status === 'pending')
+  const pendingDebts = debts.filter((d) => d.status === 'pending');
+
+  const netBalance = pendingDebts
     .reduce((sum, d) => sum + (d.fromUser === currentUserId ? -d.amount : d.amount), 0);
 
   return (
@@ -80,11 +81,11 @@ export default function LedgerPage() {
         </div>
       </div>
 
-      {debts.length > 0 && (
+      {pendingDebts.length > 0 && (
         <div className="border border-accent/30 bg-background/50 p-4">
           <h3 className="mb-2 text-accent">ACTIVE_DEBTS</h3>
           <div className="space-y-2">
-            {debts.map((debt, i) => (
+            {pendingDebts.map((debt, i) => (
               <div key={i} className="border-l-2 border-accent/30 pl-2 flex justify-between items-center pr-2">
                 <div>
                   <p className="text-secondary">{debt.status.toUpperCase()}</p>
@@ -105,7 +106,7 @@ export default function LedgerPage() {
               </div>
             ))}
           </div>
-          {debts.some(d => d.status === 'pending') && (
+          {pendingDebts.length > 0 && (
             <CandlestickButton onClick={handleSettle} isLoading={settling} className="mt-3 w-full">
               {settling ? 'SIMPLIFYING...' : 'SIMPLIFY_DEBTS'}
             </CandlestickButton>
