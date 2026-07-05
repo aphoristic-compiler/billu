@@ -1,4 +1,4 @@
-export async function queryMistral(messages: any[], userId: string, tools?: any[]) {
+export async function queryMistral(messages: any[], userId: string, tools?: any[], modelOverride?: string) {
   const keysEnv = process.env.MISTRAL_API_KEYS || '';
   const keys = keysEnv.split(',').map(k => k.trim()).filter(Boolean);
   
@@ -25,7 +25,7 @@ export async function queryMistral(messages: any[], userId: string, tools?: any[
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'mistral-large-latest',
+          model: modelOverride || 'mistral-large-latest',
           messages: messages,
           ...(tools && tools.length > 0 ? { tools, tool_choice: "auto" } : {})
         }),

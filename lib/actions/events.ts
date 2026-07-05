@@ -471,7 +471,7 @@ export async function blastEventToWing(eventId: string) {
   const typeStr = isMicro ? 'microevent (sub-position)' : 'event/trip'
   
   const longs = event.rsvps?.filter((r: any) => r.status === 'long').map((r: any) => r.user?.username).join(', ') || 'None'
-  const startsAtStr = event.startsAt ? new Date(event.startsAt).toLocaleString() : 'TBD'
+  const startsAtStr = event.startsAt ? new Date(event.startsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }) : 'TBD'
   
   const prompt = `You are the sleek, cybernetic AI terminal of the Wing. Generate a cool, witty push notification to alert members about an upcoming ${typeStr}.
 Event Title: ${event.title}
@@ -491,7 +491,7 @@ Line 4: Notes: [witty comment about the event]
 - DO NOT hallucinate any times or places.`
 
   try {
-    const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id)
+    const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id, undefined, 'mistral-small-latest')
     const jsonStr = aiRes.content.replace(/```json/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)
     
