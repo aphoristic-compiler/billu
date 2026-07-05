@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react'
 import { voteStandalonePoll, togglePollPin } from '@/lib/actions/polls'
-import { terminalToast } from '@/components/terminal-toast'
+import { toast } from '@/components/terminal-toast'
 
 interface PollOption {
   id: string
@@ -38,9 +38,9 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
                 startTransition(async () => {
                   try {
                     await togglePollPin(poll.id)
-                    terminalToast(poll.isPinned ? 'Survey removed from watchlist.' : 'Survey added to watchlist.')
+                    toast(poll.isPinned ? 'Survey removed from watchlist.' : 'Survey added to watchlist.')
                   } catch (e: any) {
-                    terminalToast(e.message, 'error')
+                    toast(e.message, 'error')
                   }
                 })
               }}

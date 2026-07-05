@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import { createStandalonePoll } from '@/lib/actions/polls'
-import { terminalToast } from '@/components/terminal-toast'
+import { toast } from '@/components/terminal-toast'
 
 export function CreatePollForm() {
   const [open, setOpen] = useState(false)
@@ -33,9 +33,9 @@ export function CreatePollForm() {
           try {
             await createStandalonePoll(question, options)
             setOpen(false)
-            terminalToast('Survey deployed.', 'success')
+            toast('Survey deployed.', 'success')
           } catch (e: any) {
-            terminalToast(e.message, 'error')
+            toast(e.message, 'error')
           }
         })
       }}
