@@ -616,7 +616,7 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
       )}
 
       <div className="mt-4 flex flex-col md:flex-row gap-3 items-start">
-        <details className="group">
+        <details className="group min-w-0 flex-1 w-full">
           <summary className="cursor-pointer font-mono text-[10px] uppercase text-accent border border-accent/30 bg-accent/5 px-2 py-1 rounded hover:bg-accent/10 select-none inline-block">
             <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> EXPENSES ({event.expenses?.length || 0})
           </summary>
@@ -626,7 +626,7 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
           </div>
         </details>
 
-        <details className="group">
+        <details className="group min-w-0 flex-1 w-full">
           <summary className="cursor-pointer font-mono text-[10px] uppercase text-profit border border-profit/30 bg-profit/5 px-2 py-1 rounded hover:bg-profit/10 select-none inline-block">
             <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> VAULT MEDIA
           </summary>

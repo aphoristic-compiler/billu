@@ -158,7 +158,17 @@ export function HiddenTerminal() {
       } else {
         print(`querying Wing AI...`)
         try {
-          const aiResponse = await queryWingAI(cmd)
+          // Construct history from previous terminal lines
+          // Ignore command errors or system lines if possible, or just treat 'input' as user and 'output' as assistant.
+          const aiHistory = lines
+            .filter(l => l.kind === 'input' || (l.kind === 'output' && !l.text.startsWith('BILLU WING') && !l.text.startsWith('type \'help\'')))
+            .slice(-6)
+            .map(l => ({
+              role: l.kind === 'input' ? 'user' : 'assistant',
+              content: l.text.startsWith('$ ') ? l.text.slice(2) : l.text
+            }));
+
+          const aiResponse = await queryWingAI(cmd, aiHistory)
           print(`\n${aiResponse}\n`, 'output')
         } catch (e: any) {
           print(`Wing AI error: ${e.message}`, 'error')
@@ -166,7 +176,7 @@ export function HiddenTerminal() {
         }
       }
     },
-    [],
+    [lines],
   )
 
   if (!open) return null

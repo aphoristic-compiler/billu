@@ -7,7 +7,7 @@ import { queryMistral } from '@/lib/mistral'
 import { getAnalyticsData } from '@/lib/actions/analytics'
 import { aiToolsConfig, executeAiTool } from '@/lib/actions/ai-tools'
 
-export async function queryWingAI(userQuery: string) {
+export async function queryWingAI(userQuery: string, history: { role: string, content: string }[] = []) {
   const user = await requireDbUser()
 
   // Fetch Core/Static DB context
@@ -80,6 +80,7 @@ PERSONALITY & RULES:
 
   const messages: any[] = [
     { role: 'system', content: systemPrompt },
+    ...history,
     { role: 'user', content: userQuery }
   ];
 
