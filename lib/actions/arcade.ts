@@ -70,7 +70,8 @@ STRICT REQUIREMENTS:
     { role: 'user', content: userPrompt }
   ]
 
-  const blueprint = await queryMistral(messages, user.id)
+  const blueprintResponse = await queryMistral(messages, user.id)
+  const blueprint = blueprintResponse?.content
   
   if (!blueprint) {
     throw new Error('Model failed to generate blueprint')
@@ -131,16 +132,16 @@ STRICT REQUIREMENTS:
     { role: 'user', content: userPrompt } // passing original prompt to reinforce intent
   ]
 
-  let responseText
+  let response
   try {
-    responseText = await queryMistral(messages, user.id)
+    response = await queryMistral(messages, user.id)
   } catch (error) {
     await db.update(activeArcadeGame).set({ status: 'failed' }).where(eq(activeArcadeGame.id, gameId))
     revalidatePath('/hub/arcade')
     throw error
   }
 
-  const html = stripCodeFences(responseText ?? '')
+  const html = stripCodeFences(response?.content ?? '')
   if (!html.toLowerCase().includes('<html') && !html.toLowerCase().includes('<canvas')) {
     await db.update(activeArcadeGame).set({ status: 'failed' }).where(eq(activeArcadeGame.id, gameId))
     revalidatePath('/hub/arcade')
