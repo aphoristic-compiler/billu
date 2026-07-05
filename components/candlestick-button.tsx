@@ -131,9 +131,9 @@ export function CandlestickButton({
       } ${className}`}
     >
       <canvas ref={canvasRef} width={120} height={40} className="max-w-[120px]" aria-hidden="true" />
-      <span className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 text-center">
-        <span className="whitespace-normal leading-tight">{busy ? 'EXECUTING...' : (label ?? children)}</span>
-        <span className="text-[10px] sm:text-xs opacity-70 whitespace-nowrap mt-1 sm:mt-0">
+      <span className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 text-center overflow-hidden">
+        <span className="whitespace-normal leading-tight truncate max-w-full">{busy ? 'EXECUTING...' : (label ?? children)}</span>
+        <span className="text-[10px] sm:text-xs opacity-70 whitespace-nowrap mt-1 sm:mt-0 flex-shrink-0">
           {effectiveGreen ? '[MARKET: GREEN]' : '[MARKET: RED]'}
         </span>
       </span>
