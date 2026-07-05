@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { generateGame, submitScore } from '@/lib/actions/arcade'
+import { generateGameBlueprint, compileGameCode, submitScore } from '@/lib/actions/arcade'
 import { CandlestickButton } from '@/components/candlestick-button'
 import { Trophy, Gamepad2 } from 'lucide-react'
 import { toast } from '@/components/terminal-toast'
@@ -16,7 +16,9 @@ interface Member {
 interface ArcadeGame {
   id: string
   prompt: string
-  generatedCode: string
+  detailedPrompt: string | null
+  generatedCode: string | null
+  status: 'generating' | 'ready' | 'failed'
   createdAt: string
 }
 interface LeaderboardRow {
@@ -91,24 +93,47 @@ export function ArcadeConsole({
     return () => window.removeEventListener('message', onMessage)
   }, [active, router])
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast('Describe the game first. The machine cannot read minds. Yet.', 'error')
       return
     }
     setGenerating(true)
-    generateGame(prompt)
-      .then(() => {
-        toast('GAME PROTOCOL COMPILED', 'profit')
-        setPrompt('')
-        setLiveScore(0)
-        setFinalScore(null)
-        router.refresh()
-      })
-      .catch((err) => {
-        toast(err?.message ?? 'GENERATION FAILED. GEMINI REFUSED THE TRADE.', 'error')
-      })
-      .finally(() => setGenerating(false))
+    try {
+      toast('FORMULATING BLUEPRINT...', 'profit')
+      const { id, blueprint } = await generateGameBlueprint(prompt)
+      router.refresh() // Show blueprint in UI
+      
+      toast('COMPILING FROM BLUEPRINT (takes 30s+)...', 'profit')
+      await compileGameCode(id, blueprint, prompt)
+      
+      toast('GAME PROTOCOL COMPILED', 'profit')
+      setPrompt('')
+      setLiveScore(0)
+      setFinalScore(null)
+    } catch (err: any) {
+      toast(err?.message ?? 'GENERATION FAILED. GEMINI REFUSED THE TRADE.', 'error')
+    } finally {
+      setGenerating(false)
+      router.refresh()
+    }
+  }
+
+  const handleResume = async (gameId: string, blueprint: string, userPrompt: string) => {
+    setGenerating(true)
+    try {
+      toast('RESUMING COMPILATION (takes 30s+)...', 'profit')
+      await compileGameCode(gameId, blueprint, userPrompt)
+      
+      toast('GAME PROTOCOL COMPILED', 'profit')
+      setLiveScore(0)
+      setFinalScore(null)
+    } catch (err: any) {
+      toast(err?.message ?? 'COMPILATION FAILED.', 'error')
+    } finally {
+      setGenerating(false)
+      router.refresh()
+    }
   }
 
   const myBest = leaderboard.find((r) => r.userId === currentUserId)?.score ?? 0
@@ -161,8 +186,54 @@ export function ArcadeConsole({
 
       {/* Active game */}
       {active ? (
-        <section className="rounded-xl border border-accent/30 bg-card p-5 shadow-[0_0_15px_rgba(52,199,89,0.05)] relative overflow-hidden">
-          {/* subtle glow effect */}
+        active.status === 'generating' ? (
+          <section className="rounded-xl border border-accent/30 bg-card p-5 shadow-[0_0_15px_rgba(52,199,89,0.05)] relative overflow-hidden flex flex-col items-center">
+            <h2 className="font-mono text-sm font-bold text-accent tracking-widest uppercase flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-accent animate-pulse shadow-[0_0_8px_rgba(52,199,89,0.8)]" />
+              {generating ? 'COMPILING CABINET...' : 'COMPILATION PAUSED'}
+            </h2>
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground uppercase opacity-80">
+              PROTOCOL: <span className="text-foreground/80 lowercase">"{active.prompt}"</span>
+            </p>
+            
+            {active.detailedPrompt && (
+              <div className="mt-6 w-full text-left border border-border p-4 rounded font-mono text-xs text-muted-foreground bg-background/50 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                <p className="text-primary mb-2 border-b border-border/50 pb-2 flex items-center justify-between">
+                  <span>BLUEPRINT_SCHEMATICS.TXT</span>
+                  {generating && <span className="animate-pulse text-[10px]">Processing...</span>}
+                </p>
+                <div className="opacity-90 leading-relaxed">
+                  {active.detailedPrompt}
+                </div>
+              </div>
+            )}
+            
+            {!generating && active.detailedPrompt && (
+              <div className="mt-6">
+                <CandlestickButton onClick={() => handleResume(active.id, active.detailedPrompt!, active.prompt)} isLoading={generating}>
+                  RESUME COMPILATION
+                </CandlestickButton>
+                <p className="font-mono text-[10px] text-muted-foreground text-center mt-3">
+                  Compilation was interrupted. Resume to finish building the HTML protocol.
+                </p>
+              </div>
+            )}
+          </section>
+        ) : active.status === 'failed' ? (
+          <section className="rounded-xl border border-warning/30 bg-card p-12 text-center bg-card/30 flex flex-col items-center justify-center">
+            <h2 className="font-mono text-lg font-bold text-warning tracking-widest">COMPILATION FAILED</h2>
+            <p className="font-mono text-xs text-muted-foreground mt-2 uppercase">"{active.prompt}"</p>
+            {active.detailedPrompt && (
+              <div className="mt-6">
+                <CandlestickButton onClick={() => handleResume(active.id, active.detailedPrompt!, active.prompt)} isLoading={generating}>
+                  RETRY COMPILATION
+                </CandlestickButton>
+              </div>
+            )}
+          </section>
+        ) : (
+          <section className="rounded-xl border border-accent/30 bg-card p-5 shadow-[0_0_15px_rgba(52,199,89,0.05)] relative overflow-hidden">
+            {/* subtle glow effect */}
           <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-accent/10 rounded-full blur-[100px] pointer-events-none" />
 
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
@@ -193,7 +264,7 @@ export function ArcadeConsole({
 
           <div className="mt-5 aspect-video w-full overflow-hidden rounded-md border border-accent/20 bg-[#0B0C10] shadow-[0_0_30px_rgba(0,0,0,0.8)_inset] relative z-10">
             <iframe
-              srcDoc={active.generatedCode}
+              srcDoc={active.generatedCode || ''}
               sandbox="allow-scripts"
               className="h-full w-full border-0 mix-blend-screen"
               title={`Arcade game: ${active.prompt}`}
@@ -213,6 +284,7 @@ export function ArcadeConsole({
             )}
           </div>
         </section>
+        )
       ) : (
         <section className="rounded-xl border border-dashed border-border p-12 text-center bg-card/30 flex flex-col items-center justify-center">
           <Gamepad2 size={32} className="text-muted-foreground mb-3 opacity-50" />

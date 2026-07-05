@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "tsx scripts/alter-polls.ts && next build --webpack",
+    "build": "tsx scripts/alter-polls.ts && tsx scripts/alter-arcade.ts && next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "clear-users": "tsx scripts/clear-users.ts"

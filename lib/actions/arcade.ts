@@ -53,36 +53,27 @@ function stripCodeFences(text: string) {
     .trim()
 }
 
-export async function generateGame(userPrompt: string) {
+export async function generateGameBlueprint(userPrompt: string) {
   const user = await requireDbUser()
   if (!userPrompt.trim()) throw new Error('Prompt required')
 
-  const systemPrompt = `You are a master arcade game developer. Generate a complex, highly polished, and playable HTML5 game based on this request: "${userPrompt}"
-
+  const systemPrompt = `You are a master arcade game designer. Your task is to expand the user's brief game idea into a highly detailed technical game design document (blueprint).
+  
 STRICT REQUIREMENTS:
-- Return ONLY a complete self-contained HTML document (inline CSS + JS). No markdown, no explanations, no code fences.
-- Canvas-based, dark background (#0B0C10), neon green (#34C759) / red (#FF3B30) / gold (#FFD60A) accents, monospace font.
-- Keyboard controls (arrows/WASD/space). Also support click/tap where sensible.
-- Track an integer score. Show it on screen at all times.
-- Implement polished game mechanics: increasing difficulty, multiple enemy types, power-ups, particle effects, and smooth animations (using requestAnimationFrame).
-- Add sound effects using the Web Audio API if possible (synthesized sounds like beeps/boops for jumping/shooting/explosions).
-- On game over, show a stylized "GAME OVER — SCORE: <n>" screen and call:
-    window.parent.postMessage({ type: 'arcade_score', score: <n> }, '*')
-- Also post the score every time it changes:
-    window.parent.postMessage({ type: 'arcade_score_live', score: <n> }, '*')
-- Include a "restart" key (R) to reset the state completely.
-- You are not bound by line limits. Write as much code as needed to make the game deep, engaging, and feature-rich (can take up to 2-5 minutes to generate). It must run with zero external resources.`
+- Describe the game mechanics, scoring system, visual aesthetic (dark #0B0C10 background, neon accents like green #34C759 / red #FF3B30 / gold #FFD60A).
+- Explicitly explain the environment: The game will run in an isolated HTML iframe sandbox on BOTH a laptop (keyboard/mouse) and a mobile device (touch/swipe/tap).
+- Detail how the controls should map to both keyboard and touch events.
+- Keep the blueprint under 200 words. Do not write any code, just the blueprint.`
 
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt }
   ]
 
-  const responseText = await queryMistral(messages, user.id)
-
-  const html = stripCodeFences(responseText ?? '')
-  if (!html.toLowerCase().includes('<html') && !html.toLowerCase().includes('<canvas')) {
-    throw new Error('Model returned invalid game code')
+  const blueprint = await queryMistral(messages, user.id)
+  
+  if (!blueprint) {
+    throw new Error('Model failed to generate blueprint')
   }
 
   // Deactivate previous games, activate the new one
@@ -95,7 +86,9 @@ STRICT REQUIREMENTS:
     .insert(activeArcadeGame)
     .values({
       prompt: userPrompt,
-      generatedCode: html,
+      detailedPrompt: blueprint,
+      generatedCode: null, // Will be filled in phase 2
+      status: 'generating',
       generatedBy: user.id,
       isActive: true,
     })
@@ -103,12 +96,69 @@ STRICT REQUIREMENTS:
 
   await logActivity(
     user.id,
-    'game_generated',
-    `[CIPHER] new arcade protocol compiled by @${user.username}: "${userPrompt.slice(0, 60)}"`,
+    'blueprint_generated',
+    `[CIPHER] @${user.username} initiated a new game protocol: "${userPrompt.slice(0, 60)}"`,
   )
 
   revalidatePath('/hub/arcade')
-  return game
+  return { id: game.id, blueprint }
+}
+
+export async function compileGameCode(gameId: string, blueprint: string, userPrompt: string) {
+  const user = await requireDbUser()
+
+  const systemPrompt = `You are a master arcade game developer. Generate a complex, highly polished, and playable HTML5 game based on this detailed design document:
+
+BLUEPRINT:
+${blueprint}
+
+STRICT REQUIREMENTS:
+- Return ONLY a complete self-contained HTML document (inline CSS + JS). No markdown, no explanations, no code fences.
+- Canvas-based, dark background (#0B0C10), neon green (#34C759) / red (#FF3B30) / gold (#FFD60A) accents, monospace font.
+- MUST SUPPORT BOTH MOBILE TOUCH CONTROLS AND LAPTOP KEYBOARD/MOUSE based on the blueprint.
+- Track an integer score. Show it on screen at all times.
+- Implement polished game mechanics: increasing difficulty, multiple enemy types, power-ups, particle effects, and smooth animations (using requestAnimationFrame).
+- Add sound effects using the Web Audio API if possible (synthesized sounds like beeps/boops for jumping/shooting/explosions).
+- On game over, show a stylized "GAME OVER — SCORE: <n>" screen and call:
+    window.parent.postMessage({ type: 'arcade_score', score: <n> }, '*')
+- Also post the score every time it changes:
+    window.parent.postMessage({ type: 'arcade_score_live', score: <n> }, '*')
+- Include a "restart" key/button to reset the state completely.
+- You are not bound by line limits. Write as much code as needed to make the game deep, engaging, and feature-rich. It must run with zero external resources.`
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt } // passing original prompt to reinforce intent
+  ]
+
+  let responseText
+  try {
+    responseText = await queryMistral(messages, user.id)
+  } catch (error) {
+    await db.update(activeArcadeGame).set({ status: 'failed' }).where(eq(activeArcadeGame.id, gameId))
+    revalidatePath('/hub/arcade')
+    throw error
+  }
+
+  const html = stripCodeFences(responseText ?? '')
+  if (!html.toLowerCase().includes('<html') && !html.toLowerCase().includes('<canvas')) {
+    await db.update(activeArcadeGame).set({ status: 'failed' }).where(eq(activeArcadeGame.id, gameId))
+    revalidatePath('/hub/arcade')
+    throw new Error('Model returned invalid game code')
+  }
+
+  await db
+    .update(activeArcadeGame)
+    .set({ generatedCode: html, status: 'ready' })
+    .where(eq(activeArcadeGame.id, gameId))
+
+  await logActivity(
+    user.id,
+    'game_generated',
+    `[CIPHER] arcade protocol fully compiled by @${user.username}`,
+  )
+
+  revalidatePath('/hub/arcade')
 }
 
 export async function submitScore(arcadeGameId: string, score: number, timePlayed: number) {

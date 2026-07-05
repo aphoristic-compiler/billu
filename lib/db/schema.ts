@@ -278,7 +278,9 @@ export const quotes = pgTable("quotes", {
 export const activeArcadeGame = pgTable("active_arcade_game", {
   id: uuid("id").primaryKey().defaultRandom(),
   prompt: text("prompt").notNull(),
-  generatedCode: text("generated_code").notNull(),
+  detailedPrompt: text("detailed_prompt"),
+  generatedCode: text("generated_code"),
+  status: varchar("status", { length: 20 }).notNull().default("generating"),
   generatedBy: uuid("generated_by")
     .notNull()
     .references(() => users.id),

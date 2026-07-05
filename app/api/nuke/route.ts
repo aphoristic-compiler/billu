@@ -39,7 +39,8 @@ export async function GET() {
         "active_arcade_game", 
         "arcade_leaderboard", 
         "system_leaks", 
-        "activity_log"
+        "activity_log",
+        "push_subscriptions"
       CASCADE;
     `)
     
