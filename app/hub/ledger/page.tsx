@@ -33,7 +33,7 @@ export default function LedgerPage() {
     setSettling(true);
     try {
       await settleDebts();
-      toast('DEBTS_SETTLED', 'success');
+      toast('DEBTS_SIMPLIFIED', 'success');
       const d = await getDebts();
       setDebts(d);
     } catch (err) {
