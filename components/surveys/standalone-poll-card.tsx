@@ -34,11 +34,19 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
     <div className="flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-4">
       <div className="flex justify-between items-start gap-4">
         <div>
-          <p className="font-mono text-sm text-accent break-words">
-            <span className="text-primary/70 mr-1">[MARKET_SURVEY]</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs font-bold text-accent">
+              [MARKET_SURVEY]
+            </span>
+            {poll.isAnonymous && (
+              <span className="rounded border border-muted-foreground/30 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                ANONYMOUS
+              </span>
+            )}
+          </div>
+          <h3 className="mt-1 font-mono text-lg font-bold text-balance text-primary">
             {poll.question}
-            {poll.isAnonymous && <span className="ml-2 text-xs text-muted-foreground whitespace-nowrap">[anonymous]</span>}
-          </p>
+          </h3>
           {poll.creator && (
             <p className="font-mono text-xs text-muted-foreground mt-1">
               @{poll.creator.username}

@@ -124,7 +124,10 @@ export async function getDashboardData() {
     options: p.options.map(o => ({
       id: o.id,
       label: o.label,
-      votes: o.votes.map(v => ({ userId: v.userId }))
+      votes: o.votes.map(v => ({ 
+        userId: v.userId,
+        user: v.user ? { username: v.user.username } : null 
+      }))
     }))
   }))
 
