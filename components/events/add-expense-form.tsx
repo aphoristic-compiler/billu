@@ -246,7 +246,7 @@ export function AddExpenseForm({
           {members.map((m) => {
             const data = splits[m.id] || { selected: false, value: '' }
             return (
-              <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-1 hover:bg-card gap-1 sm:gap-2">
+              <div key={m.id} className="flex items-center justify-between p-1 hover:bg-card gap-2">
                 <label className="flex flex-1 items-center gap-2 cursor-pointer min-w-0">
                   {splitMode === 'equal' && (
                     <input

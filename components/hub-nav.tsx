@@ -12,8 +12,8 @@ const LINKS = [
   { href: '/hub/events', label: 'EVENTS', code: '01' },
   { href: '/hub/ledger', label: 'MARGIN_CALL', code: '02' },
   { href: '/hub/games', label: 'GAME_TRACKER', code: '03' },
-  { href: '/hub/vault', label: 'VAULT', code: '04' },
   { href: '/hub/arcade', label: 'ARCADE', code: '05' },
+  { href: '/hub/surveys', label: 'MARKET_SURVEYS', code: '06' },
 ]
 
 export function HubNav({ memberName }: { memberName: string }) {

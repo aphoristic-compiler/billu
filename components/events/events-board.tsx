@@ -21,7 +21,6 @@ import { saveVaultMedia } from '@/lib/actions/vault'
 import { CldUploadWidget } from 'next-cloudinary'
 import { toast as terminalToast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
-import { CreatePollForm } from '@/components/surveys/create-poll-form'
 
 // ─── Types (serialized from server) ───
 interface Member {
@@ -368,13 +367,13 @@ function ExpenseList({ expenses, members, currentUserId }: { expenses: any[]; me
           )
         }
         return (
-          <li key={ex.id} className="flex items-center justify-between rounded border border-border/40 bg-card/50 px-2 py-1 font-mono text-xs">
-            <span className="flex flex-col gap-0.5">
-              <span className="text-foreground">{ex.title} <span className="text-muted-foreground">by</span> @{ex.payer.username}</span>
+          <li key={ex.id} className="flex flex-wrap items-start justify-between gap-2 rounded border border-border/40 bg-card/50 px-2 py-1 font-mono text-xs">
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-foreground truncate">{ex.title} <span className="text-muted-foreground">by</span> @{ex.payer.username}</span>
               <span className="text-loss font-bold">₹{ex.totalAmount.toLocaleString('en-IN')}</span>
             </span>
             {ex.paidBy === currentUserId && (
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 mt-1 sm:mt-0">
                 <button
                   type="button"
                   disabled={pending}
@@ -886,14 +885,13 @@ export function EventsBoard({
       {creating ? (
         <CreateEventForm onClose={() => setCreating(false)} />
       ) : (
-        <div className="flex gap-4">
+        <div>
           <button 
             onClick={() => setCreating(true)}
             className="rounded border border-primary px-4 py-2 font-mono text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
           >
             + OPEN_NEW_POSITION
           </button>
-          <CreatePollForm />
         </div>
       )}
 
