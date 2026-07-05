@@ -149,14 +149,15 @@ No hashtags. No markdown.`
 
   try {
     const aiResponse = await queryMistral(messages, user.id)
+    const textContent = aiResponse.content || "The Wing AI had nothing to say."
     
     // Save to DB
     await db.insert(dailyBanners).values({
       date: today,
-      content: aiResponse,
+      content: textContent,
     })
     
-    return aiResponse
+    return textContent
   } catch (err) {
     console.error('Failed to generate daily banner:', err)
     return "The Wing AI is currently disconnected. Go touch some grass or log a debt."
