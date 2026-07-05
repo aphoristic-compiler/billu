@@ -362,38 +362,42 @@ export const aiToolsConfig = [
 ];
 
 export async function executeAiTool(name: string, args: any) {
-  switch (name) {
-    case 'search_vault': return await search_vault(args.searchQuery);
-    case 'get_vault_trip_expenses': return await get_vault_trip_expenses(args.eventId);
-    case 'get_user_financials': return await get_user_financials(args.username);
-    case 'query_game_tracker': return await query_game_tracker();
-    case 'query_active_events': return await query_active_events();
-    case 'query_polls': return await query_polls();
-    case 'compile_roast_dossier': return await compile_roast_dossier(args.username);
-    case 'calculate_systemic_risk': return await calculate_systemic_risk();
-    case 'simulate_match_odds': return await simulate_match_odds(args.player1, args.player2, args.gameName);
-    case 'dig_up_dirt': return await dig_up_dirt(args.username);
-    case 'query_market_sentiment': return await query_market_sentiment();
-    
-    // Write Tools
-    case 'create_event': return await ai_create_event(args);
-    case 'edit_event': return await ai_edit_event(args);
-    case 'delete_event': return await ai_delete_event(args);
-    case 'vault_event': return await ai_vault_event(args);
-    case 'pin_event': return await ai_pin_event(args);
-    case 'add_microevent': return await ai_add_microevent(args);
-    case 'add_game_match': return await ai_add_game_match(args);
-    case 'execute_transaction': return await ai_execute_transaction(args);
-    case 'create_market_survey': return await ai_create_market_survey(args);
-    case 'delete_poll': return await ai_delete_poll(args);
-    case 'vault_poll': return await ai_vault_poll(args);
-    case 'pin_poll': return await ai_pin_poll(args);
-    case 'get_full_leaderboard': return await ai_get_full_leaderboard();
-    case 'list_wing_members': return await ai_list_wing_members();
-    case 'list_market_surveys': return await ai_list_market_surveys(args);
-    case 'log_system_leak': return await ai_log_system_leak(args);
-    
-    default: return JSON.stringify({ error: `Tool ${name} not found.` });
+  try {
+    switch (name) {
+      case 'search_vault': return await search_vault(args.searchQuery);
+      case 'get_vault_trip_expenses': return await get_vault_trip_expenses(args.eventId);
+      case 'get_user_financials': return await get_user_financials(args.username);
+      case 'query_game_tracker': return await query_game_tracker();
+      case 'query_active_events': return await query_active_events();
+      case 'query_polls': return await query_polls();
+      case 'compile_roast_dossier': return await compile_roast_dossier(args.username);
+      case 'calculate_systemic_risk': return await calculate_systemic_risk();
+      case 'simulate_match_odds': return await simulate_match_odds(args.player1, args.player2, args.gameName);
+      case 'dig_up_dirt': return await dig_up_dirt(args.username);
+      case 'query_market_sentiment': return await query_market_sentiment();
+      
+      // Write Tools
+      case 'create_event': return await ai_create_event(args);
+      case 'edit_event': return await ai_edit_event(args);
+      case 'delete_event': return await ai_delete_event(args);
+      case 'vault_event': return await ai_vault_event(args);
+      case 'pin_event': return await ai_pin_event(args);
+      case 'add_microevent': return await ai_add_microevent(args);
+      case 'add_game_match': return await ai_add_game_match(args);
+      case 'execute_transaction': return await ai_execute_transaction(args);
+      case 'create_market_survey': return await ai_create_market_survey(args);
+      case 'delete_poll': return await ai_delete_poll(args);
+      case 'vault_poll': return await ai_vault_poll(args);
+      case 'pin_poll': return await ai_pin_poll(args);
+      case 'get_full_leaderboard': return await ai_get_full_leaderboard();
+      case 'list_wing_members': return await ai_list_wing_members();
+      case 'list_market_surveys': return await ai_list_market_surveys(args);
+      case 'log_system_leak': return await ai_log_system_leak(args);
+      
+      default: return JSON.stringify({ error: `Tool ${name} not found.` });
+    }
+  } catch (err: any) {
+    return JSON.stringify({ error: `System Error executing ${name}: ${err.message}` });
   }
 }
 

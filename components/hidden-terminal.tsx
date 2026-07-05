@@ -184,7 +184,7 @@ export function HiddenTerminal() {
                     : 'text-chalk-bright'
               }`}
             >
-              {l.text}
+              {parseTerminalText(l.text)}
             </pre>
           ))}
         </div>
