@@ -138,6 +138,7 @@ export function AddExpenseForm({
             expenseId: initialExpense.id,
             title: title.trim(),
             totalAmount: total,
+            paidBy,
             splits: finalSplits,
           })
           terminalToast('Expense updated successfully.', 'success')

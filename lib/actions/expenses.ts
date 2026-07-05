@@ -215,6 +215,7 @@ export async function updateExpense(input: {
   expenseId: string
   title: string
   totalAmount: number
+  paidBy: string
   splits: { userId: string; amount: number }[]
 }) {
   const user = await requireDbUser()
@@ -232,6 +233,7 @@ export async function updateExpense(input: {
   await db.update(expenses).set({
     title: input.title,
     totalAmount: input.totalAmount,
+    paidBy: input.paidBy,
     updatedAt: new Date(),
   }).where(eq(expenses.id, input.expenseId))
 
@@ -248,10 +250,10 @@ export async function updateExpense(input: {
   )
 
   const newDebts = input.splits
-    .filter((s) => s.userId !== expense.paidBy && s.amount > 0)
+    .filter((s) => s.userId !== input.paidBy && s.amount > 0)
     .map((s) => ({
       fromUser: s.userId,
-      toUser: expense.paidBy,
+      toUser: input.paidBy,
       amount: s.amount,
       expenseId: input.expenseId,
     }))

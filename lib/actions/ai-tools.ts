@@ -370,6 +370,7 @@ export const aiToolsConfig = [
           expenseId: { type: 'string' },
           title: { type: 'string' },
           totalAmount: { type: 'number' },
+          paidBy: { type: 'string', description: 'The username of the person who paid this expense.' },
           splits: {
             type: 'array',
             description: 'Array of { username, amount } for the updated splits.',
@@ -382,7 +383,7 @@ export const aiToolsConfig = [
             }
           }
         },
-        required: ['expenseId', 'title', 'totalAmount', 'splits']
+        required: ['expenseId', 'title', 'totalAmount', 'paidBy', 'splits']
       }
     }
   }
@@ -966,8 +967,11 @@ import { updateExpense } from '@/lib/actions/expenses'
 
 async function ai_edit_expense(args: any) {
   try {
-    const { expenseId, title, totalAmount, splits } = args;
+    const { expenseId, title, totalAmount, paidBy, splits } = args;
     
+    const payerUser = await db.query.users.findFirst({ where: eq(users.username, paidBy) });
+    if (!payerUser) return JSON.stringify({ error: `Payer user @${paidBy} not found.` });
+
     // map usernames to user IDs for the splits
     const finalSplits = [];
     for (const s of splits) {
@@ -980,6 +984,7 @@ async function ai_edit_expense(args: any) {
       expenseId,
       title,
       totalAmount,
+      paidBy: payerUser.id,
       splits: finalSplits
     });
 
