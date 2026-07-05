@@ -33,13 +33,18 @@ export function HubNav({ memberName }: { memberName: string }) {
           >
             <Menu size={20} />
           </button>
-          <span 
-            className="font-mono text-sm font-bold text-primary cursor-pointer hover:text-primary/80 transition-colors"
+          <div 
+            className="flex items-center gap-2 cursor-pointer group"
             onClick={() => window.dispatchEvent(new CustomEvent('open-terminal'))}
             title="Open Developer Terminal"
           >
-            SATURO://
-          </span>
+            <div className="relative w-7 h-7 overflow-hidden rounded-md border border-primary/30 group-hover:border-primary transition-colors">
+              <img src="/logo.png" alt="Billu Hub Logo" className="object-cover w-full h-full" />
+            </div>
+            <span className="font-mono text-sm font-bold text-primary group-hover:text-primary/80 transition-colors">
+              SATURO://
+            </span>
+          </div>
           <span className="hidden md:inline font-mono text-xs text-muted-foreground">
             wing_terminal v2.0
           </span>
