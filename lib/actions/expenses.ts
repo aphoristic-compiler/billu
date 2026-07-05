@@ -354,6 +354,12 @@ export async function deleteExpense(expenseId: string) {
     throw new Error('Only the payer can delete this expense')
   }
 
+  // Check if any debts from this expense have been settled
+  const relatedDebts = await db.select().from(debts).where(eq(debts.expenseId, expenseId))
+  const hasSettled = relatedDebts.some(d => d.status === 'settled')
+  if (hasSettled) throw new Error('Cannot delete: some debts from this expense are already settled')
+
+
   await db.delete(debts).where(eq(debts.expenseId, expenseId))
   await db.delete(expenses).where(eq(expenses.id, expenseId))
 

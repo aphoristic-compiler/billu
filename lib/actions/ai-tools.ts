@@ -358,6 +358,33 @@ export const aiToolsConfig = [
         required: ['question', 'options']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'edit_expense',
+      description: 'Edits an existing expense.',
+      parameters: {
+        type: 'object',
+        properties: {
+          expenseId: { type: 'string' },
+          title: { type: 'string' },
+          totalAmount: { type: 'number' },
+          splits: {
+            type: 'array',
+            description: 'Array of { username, amount } for the updated splits.',
+            items: {
+              type: 'object',
+              properties: {
+                username: { type: 'string' },
+                amount: { type: 'number' }
+              }
+            }
+          }
+        },
+        required: ['expenseId', 'title', 'totalAmount', 'splits']
+      }
+    }
   }
 ];
 
@@ -385,6 +412,7 @@ export async function executeAiTool(name: string, args: any) {
       case 'add_microevent': return await ai_add_microevent(args);
       case 'add_game_match': return await ai_add_game_match(args);
       case 'execute_transaction': return await ai_execute_transaction(args);
+      case 'edit_expense': return await ai_edit_expense(args);
       case 'create_market_survey': return await ai_create_market_survey(args);
       case 'delete_poll': return await ai_delete_poll(args);
       case 'vault_poll': return await ai_vault_poll(args);
@@ -933,3 +961,31 @@ async function ai_list_wing_members() {
     return JSON.stringify({ error: err.message });
   }
 }
+
+import { updateExpense } from '@/lib/actions/expenses'
+
+async function ai_edit_expense(args: any) {
+  try {
+    const { expenseId, title, totalAmount, splits } = args;
+    
+    // map usernames to user IDs for the splits
+    const finalSplits = [];
+    for (const s of splits) {
+      const u = await db.query.users.findFirst({ where: eq(users.username, s.username) });
+      if (!u) return JSON.stringify({ error: `User @${s.username} not found.` });
+      finalSplits.push({ userId: u.id, amount: s.amount });
+    }
+
+    await updateExpense({
+      expenseId,
+      title,
+      totalAmount,
+      splits: finalSplits
+    });
+
+    return JSON.stringify({ success: true, message: `Expense updated to ${title} for ₹${totalAmount}.` });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+

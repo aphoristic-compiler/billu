@@ -345,39 +345,65 @@ function AddMicroEventForm({ parentEventId }: { parentEventId: string }) {
   )
 }
 
-function ExpenseList({ expenses, currentUserId }: { expenses: any[]; currentUserId: string }) {
+function ExpenseList({ expenses, members, currentUserId }: { expenses: any[]; members: Member[]; currentUserId: string }) {
   const [pending, startTransition] = useTransition()
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null)
   if (!expenses?.length) return null
   
   return (
     <ul className="mt-2 flex flex-col gap-1">
-      {expenses.map((ex) => (
-        <li key={ex.id} className="flex items-center justify-between rounded border border-border/40 bg-card/50 px-2 py-1 font-mono text-xs">
-          <span className="flex flex-col gap-0.5">
-            <span className="text-foreground">{ex.title} <span className="text-muted-foreground">by</span> @{ex.payer.username}</span>
-            <span className="text-loss font-bold">₹{ex.totalAmount.toLocaleString('en-IN')}</span>
-          </span>
-          {ex.paidBy === currentUserId && (
-            <InlineConfirmButton
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  try {
-                    await deleteExpense(ex.id)
-                    terminalToast('Expense voided.')
-                  } catch (e: any) {
-                    terminalToast(e.message, 'error')
-                  }
-                })
-              }}
-              idleLabel="[del]"
-              confirmLabel="[CONFIRM_VOID?]"
-              idleClassName="text-muted-foreground hover:text-destructive"
-              confirmClassName="text-destructive font-bold"
-            />
-          )}
-        </li>
-      ))}
+      {expenses.map((ex) => {
+        if (editingExpenseId === ex.id) {
+          return (
+            <div key={ex.id} className="my-1 rounded border border-loss/40 bg-card p-3 shadow-sm max-w-full overflow-x-auto">
+              <AddExpenseForm
+                eventId={ex.eventId}
+                members={members}
+                currentUserId={currentUserId}
+                initialExpense={ex}
+                onCancel={() => setEditingExpenseId(null)}
+              />
+            </div>
+          )
+        }
+        return (
+          <li key={ex.id} className="flex items-center justify-between rounded border border-border/40 bg-card/50 px-2 py-1 font-mono text-xs">
+            <span className="flex flex-col gap-0.5">
+              <span className="text-foreground">{ex.title} <span className="text-muted-foreground">by</span> @{ex.payer.username}</span>
+              <span className="text-loss font-bold">₹{ex.totalAmount.toLocaleString('en-IN')}</span>
+            </span>
+            {ex.paidBy === currentUserId && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setEditingExpenseId(ex.id)}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  [edit]
+                </button>
+                <InlineConfirmButton
+                  disabled={pending}
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        await deleteExpense(ex.id)
+                        terminalToast('Expense voided.')
+                      } catch (e: any) {
+                        terminalToast(e.message, 'error')
+                      }
+                    })
+                  }}
+                  idleLabel="[del]"
+                  confirmLabel="[CONFIRM_VOID?]"
+                  idleClassName="text-muted-foreground hover:text-destructive"
+                  confirmClassName="text-destructive font-bold"
+                />
+              </div>
+            )}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -594,9 +620,9 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
           <summary className="cursor-pointer font-mono text-[10px] uppercase text-accent border border-accent/30 bg-accent/5 px-2 py-1 rounded hover:bg-accent/10 select-none inline-block">
             <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> EXPENSES ({event.expenses?.length || 0})
           </summary>
-          <div className="mt-2 flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-3 min-w-[250px]">
+          <div className="mt-2 flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-3 min-w-[250px] max-w-[100vw] overflow-x-auto">
             <AddExpenseForm eventId={event.id} members={members} currentUserId={currentUserId} />
-            <ExpenseList expenses={event.expenses} currentUserId={currentUserId} />
+            <ExpenseList expenses={event.expenses} members={members} currentUserId={currentUserId} />
           </div>
         </details>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { addExpense } from '@/lib/actions/expenses'
+import { addExpense, updateExpense } from '@/lib/actions/expenses'
 import { toast as terminalToast } from '@/components/terminal-toast'
 import { CandlestickButton } from '@/components/candlestick-button'
 
@@ -17,16 +17,20 @@ export function AddExpenseForm({
   eventId,
   members,
   currentUserId,
+  initialExpense,
+  onCancel,
 }: {
   eventId?: string
   members: Member[]
   currentUserId: string
+  initialExpense?: any
+  onCancel?: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [amount, setAmount] = useState('')
-  const [paidBy, setPaidBy] = useState(currentUserId)
-  const [splitMode, setSplitMode] = useState<SplitMode>('equal')
+  const [open, setOpen] = useState(!!initialExpense)
+  const [title, setTitle] = useState(initialExpense?.title || '')
+  const [amount, setAmount] = useState(initialExpense?.totalAmount?.toString() || '')
+  const [paidBy, setPaidBy] = useState(initialExpense?.paidBy || currentUserId)
+  const [splitMode, setSplitMode] = useState<SplitMode>(initialExpense ? 'unequal' : 'equal')
   const [pending, startTransition] = useTransition()
 
   // State to hold the split inputs
@@ -35,7 +39,18 @@ export function AddExpenseForm({
   >(() => {
     const initial: Record<string, { selected: boolean; value: string }> = {}
     members.forEach((m) => {
-      initial[m.id] = { selected: m.id === currentUserId, value: '' }
+      let val = ''
+      let selected = false
+      if (initialExpense && initialExpense.splits) {
+        const matchingSplit = initialExpense.splits.find((s: any) => s.userId === m.id)
+        if (matchingSplit) {
+          val = matchingSplit.amount.toString()
+          selected = true
+        }
+      } else {
+        selected = m.id === currentUserId
+      }
+      initial[m.id] = { selected, value: val }
     })
     return initial
   })
@@ -118,17 +133,35 @@ export function AddExpenseForm({
 
     startTransition(async () => {
       try {
-        await addExpense({
-          title,
-          totalAmount: total,
-          paidBy,
-          eventId,
-          splits: finalSplits,
-        })
-        setOpen(false)
-        setTitle('')
-        setAmount('')
-        terminalToast('Expense logged successfully.', 'success')
+        if (initialExpense) {
+          await updateExpense({
+            expenseId: initialExpense.id,
+            title: title.trim(),
+            totalAmount: total,
+            splits: finalSplits,
+          })
+          terminalToast('Expense updated successfully.', 'success')
+          if (onCancel) onCancel()
+        } else {
+          await addExpense({
+            title: title.trim(),
+            totalAmount: total,
+            paidBy,
+            eventId,
+            splits: finalSplits,
+          })
+          terminalToast('Expense logged successfully.', 'success')
+          setOpen(false)
+          setTitle('')
+          setAmount('')
+          setPaidBy(currentUserId)
+          setSplitMode('equal')
+          const initialObj: Record<string, { selected: boolean; value: string }> = {}
+          members.forEach((m) => {
+            initialObj[m.id] = { selected: m.id === currentUserId, value: '' }
+          })
+          setSplits(initialObj)
+        }
       } catch (err: any) {
         terminalToast(err.message || 'Failed to log expense.', 'error')
       }
@@ -144,7 +177,7 @@ export function AddExpenseForm({
         <p className="font-mono text-xs font-bold text-loss">ADVANCED_SETTLEMENT</p>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={() => (onCancel ? onCancel() : setOpen(false))}
           className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
         >
           [CLOSE]
@@ -273,7 +306,7 @@ export function AddExpenseForm({
           isLoading={pending}
           className="!border-loss !text-loss hover:!bg-loss/10 px-4 py-2"
         >
-          {pending ? 'PROCESSING...' : 'COMMIT_EXPENSE'}
+          {pending ? 'PROCESSING...' : (initialExpense ? 'UPDATE_EXPENSE' : 'COMMIT_EXPENSE')}
         </CandlestickButton>
       </div>
     </form>
