@@ -1,10 +1,14 @@
-﻿import { CapacitorConfig } from "@capacitor/cli";
+import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.billu.hub",
   appName: "BILLU HUB",
-  webDir: ".next/server/app",
-  bundledWebRuntime: false
+  webDir: "public",
+  bundledWebRuntime: false,
+  server: {
+    url: "https://billu-zeta.vercel.app",
+    cleartext: true
+  }
 };
 
 export default config;

@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   description:
     'Digital memorial, event planner, game tracker, expense splitter, quotes archive, and AI arcade for Billu Wing.',
   generator: 'v0.app',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'BILLU HUB',
+    statusBarStyle: 'black-translucent',
+  },
 }
 
 export const viewport: Viewport = {
