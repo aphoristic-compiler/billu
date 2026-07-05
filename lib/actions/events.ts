@@ -2,12 +2,17 @@
 
 import { revalidatePath } from 'next/cache'
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
-import { db, events, rsvps, polls, pollOptions, pollVotes, users, expenses, debts } from '@/lib/db'
+import { db, events, rsvps, polls, pollOptions, pollVotes, users, expenses, debts, matchParticipants } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 
 const tickerize = (title: string) =>
   '$' + title.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24)
+
+const parseStartsAt = (t?: string) => {
+  if (!t) return null;
+  return t.includes('T') && !t.includes('Z') && !t.includes('+') ? new Date(`${t}+05:30`) : new Date(t);
+}
 
 export async function createEvent(input: {
   title: string
@@ -38,7 +43,7 @@ export async function createEvent(input: {
       category: input.category,
       location: input.location,
       locationCustom: input.locationCustom || null,
-      startsAt: input.startsAt ? new Date(input.startsAt) : null,
+      startsAt: parseStartsAt(input.startsAt),
       whatsappBlasted: !!input.whatsappBlasted,
     })
     .returning()
@@ -54,7 +59,7 @@ export async function createEvent(input: {
           category: 'treat' as const,
           location: (m.location || 'other') as typeof input.location,
           locationCustom: m.locationCustom || null,
-          startsAt: input.startsAt ? new Date(input.startsAt) : null,
+          startsAt: parseStartsAt(input.startsAt),
         })),
     )
   }
@@ -91,7 +96,7 @@ export async function updateEvent(eventId: string, input: {
       category: input.category as any,
       location: input.location as any,
       locationCustom: input.locationCustom || null,
-      startsAt: input.startsAt ? new Date(input.startsAt) : null,
+      startsAt: parseStartsAt(input.startsAt),
     })
     .where(eq(events.id, eventId))
     .returning()
@@ -473,30 +478,46 @@ export async function blastEventToWing(eventId: string) {
   const longs = event.rsvps?.filter((r: any) => r.status === 'long').map((r: any) => r.user?.username).join(', ') || 'None'
   const startsAtStr = event.startsAt ? new Date(event.startsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }) : 'TBD'
   
+  const pendingDebts = await db.query.debts.findMany({
+    where: and(eq(debts.fromUser, event.createdBy), eq(debts.status, 'pending'))
+  });
+  const totalDebt = pendingDebts.reduce((sum, d) => sum + d.amount, 0);
+
+  const gamesPlayed = await db.query.matchParticipants.findMany({
+    where: eq(matchParticipants.userId, event.createdBy)
+  });
+  const gamesLost = gamesPlayed.filter(g => !g.isWinner).length;
+  const gamesWon = gamesPlayed.filter(g => g.isWinner).length;
+  
+  const creatorStats = [];
+  if (totalDebt > 0) creatorStats.push(`Is currently in debt for ₹${totalDebt}.`);
+  if (gamesPlayed.length > 0) creatorStats.push(`Gaming record: ${gamesWon} wins, ${gamesLost} losses.`);
+  const roastContext = creatorStats.length ? `\nContext to ruthlessly roast the creator: ${creatorStats.join(' ')} (e.g. if giving a treat but in debt, roast them hard. if losing games frequently, roast them).` : '';
+
   const prompt = `You are the sleek, cybernetic AI terminal of the Wing. Generate a cool, witty push notification to alert members about an upcoming ${typeStr}.
 Event Title: ${event.title}
 Start Time: ${startsAtStr}
 Location: ${event.location === 'other' ? (event.locationCustom || 'Unknown') : event.location}
 Created by: @${event.creator?.username}
-Going LONG: ${longs}
+Going LONG: ${longs}${roastContext}
 
 Rules:
 - Format strictly as JSON with 'title' and 'body'.
 - Use clean Title Case for the title (max 40 chars).
 - The 'body' MUST be formatted EXACTLY with these 4 lines using \n for line breaks:
-Line 1: A short, witty hacker-themed intro (e.g. "Terminal activated.")
+Line 1: A short, savage hacker-themed intro (e.g. "Terminal activated.") that incorporates the roast if applicable.
 Line 2: Location: [insert location]
 Line 3: Time: [insert Start Time]
-Line 4: Notes: [witty comment about the event]
+Line 4: Notes: [savage comment about the event or creator]
 - DO NOT hallucinate any times or places.`
 
   try {
-    const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id, undefined, 'mistral-small-latest')
+    const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id, undefined, 'mistral-medium-latest')
     const jsonStr = aiRes.content.replace(/```json/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)
     
     const { broadcastToWing } = await import('./push')
-    const broadcastResult = await broadcastToWing(parsed.title, parsed.body)
+    const broadcastResult = await broadcastToWing(parsed.title, parsed.body, '/hub', '/push-icon.png', '/push-badge.png')
     
     if (!broadcastResult.success) {
       throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.')
@@ -519,10 +540,9 @@ Line 4: Notes: [witty comment about the event]
 
     // Fallback if Mistral fails, just use generic push
     const { broadcastToWing } = await import('./push')
-    const genericTitle = `🚨 MARGIN CALL: ${event.category || event.type}`
-    const genericBody = `@${event.creator?.username} scheduled ${event.title || event.name}`
-    
-    const broadcastResult = await broadcastToWing(genericTitle, genericBody)
+    const fallbackTitle = `🚨 MARGIN CALL: ${event.category || typeStr}`
+    const fallbackBody = `@${event.creator.username} scheduled ${event.title}`
+    const broadcastResult = await broadcastToWing(fallbackTitle, fallbackBody, '/hub', '/push-icon.png', '/push-badge.png')
     
     if (!broadcastResult.success) {
       throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.')

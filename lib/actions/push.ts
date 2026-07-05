@@ -50,7 +50,7 @@ export async function saveSubscription(userId: string, subscription: any) {
   }
 }
 
-export async function broadcastToWing(title: string, body: string, url: string = "/hub") {
+export async function broadcastToWing(title: string, body: string, url: string = "/hub", icon?: string, badge?: string) {
   if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     console.warn("VAPID keys not configured, skipping broadcast")
     throw new Error("VAPID keys are missing in Vercel environment.")
@@ -58,7 +58,7 @@ export async function broadcastToWing(title: string, body: string, url: string =
 
   try {
     const allSubs = await db.select().from(pushSubscriptions)
-    const payload = JSON.stringify({ title, body, url })
+    const payload = JSON.stringify({ title, body, url, icon, badge })
 
     const promises = allSubs.map((sub) => {
       const pushSubscription = {
