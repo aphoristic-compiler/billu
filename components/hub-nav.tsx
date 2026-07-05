@@ -78,7 +78,7 @@ export function HubNav({ memberName }: { memberName: string }) {
             className="fixed inset-0 bg-background/80 backdrop-blur-sm"
             onClick={() => setIsMobileOpen(false)}
           />
-          <div className="relative w-64 max-w-sm flex-col bg-background/95 border-r border-border h-full p-4 shadow-xl font-mono flex">
+          <div className="relative w-64 max-w-sm flex-col bg-background backdrop-blur-md border-r border-border h-full p-4 shadow-2xl font-mono flex">
             <div className="flex items-center justify-between mb-8">
               <span className="font-bold text-primary">SATURO://</span>
               <button 

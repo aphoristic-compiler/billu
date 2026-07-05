@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
-import { voteStandalonePoll, togglePollPin, deletePoll, archivePoll } from '@/lib/actions/polls'
+import { voteStandalonePoll, togglePollPin, deletePoll, archivePoll, blastPollToWing } from '@/lib/actions/polls'
 import { broadcastToWing } from '@/lib/actions/push'
 import { toast } from '@/components/terminal-toast'
 import { useState } from 'react'
@@ -10,14 +10,15 @@ import { EditPollDialog } from './edit-poll-dialog'
 interface PollOption {
   id: string
   label: string
-  votes: { userId: string }[]
+  votes: { userId: string; user?: { username: string } | null }[]
 }
 
 interface Poll {
   id: string
   question: string
   isPinned?: boolean
-  creator?: { username: string } | null
+  isAnonymous?: boolean
+  creator?: { id: string; username: string } | null
   options: PollOption[]
 }
 
@@ -26,37 +27,37 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
   const [isEditing, setIsEditing] = useState(false)
   const totalVotes = poll.options.reduce((s, o) => s + o.votes.length, 0)
   
-  const isCreator = poll.creator && poll.creator.username === currentUserId
+  const isCreator = poll.creator && poll.creator.id === currentUserId
 
   return (
     <div className="flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-4">
       <div className="flex justify-between items-start">
-        <p className="font-mono text-sm text-accent">[MARKET_SURVEY] {poll.question}</p>
+        <p className="font-mono text-sm text-accent">
+          [MARKET_SURVEY] {poll.question}
+          {poll.isAnonymous && <span className="ml-2 text-xs text-muted-foreground">[anonymous]</span>}
+        </p>
         <div className="flex gap-2">
           {poll.creator && (
             <span className="font-mono text-xs text-muted-foreground">@{poll.creator.username}</span>
           )}
-          {poll.creator && poll.creator.username === currentUserId && (
+          {poll.creator && poll.creator.id === currentUserId && (
             <button
               type="button"
               disabled={pending}
               onClick={() => {
                 startTransition(async () => {
                   try {
-                    await broadcastToWing(
-                      "📊 NEW MARKET SURVEY", 
-                      `@${poll.creator?.username} just dropped a poll: ${poll.question}`
-                    )
+                    await blastPollToWing(poll.id)
                     toast('Blast sent to all operators.')
                   } catch (e: any) {
                     toast(e.message, 'error')
                   }
                 })
               }}
-              className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors"
+              className="font-mono text-xs text-primary hover:text-accent transition-colors whitespace-nowrap"
               title="Blast Notification to Wing"
             >
-              [🚀 blast]
+              BLAST_THE_INVESTORS {'->'}
             </button>
           )}
           {poll.isPinned !== undefined && (
@@ -73,7 +74,7 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
                   }
                 })
               }}
-              className="font-mono text-xs text-muted-foreground hover:text-warning transition-colors"
+              className="font-mono text-xs text-muted-foreground hover:text-warning transition-colors whitespace-nowrap"
             >
               {poll.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
             </button>
@@ -131,18 +132,30 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
                 className="absolute inset-y-0 left-0 bg-accent/20 transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => startTransition(() => voteStandalonePoll(poll.id, opt.id))}
-                className="relative flex w-full items-center justify-between p-2 font-mono text-xs"
-              >
-                <span className="text-foreground z-10 flex items-center gap-2">
-                  {hasVoted && <span className="text-accent">✓</span>}
-                  {opt.label}
-                </span>
-                <span className="text-muted-foreground z-10">{pct}% ({count})</span>
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => startTransition(() => voteStandalonePoll(poll.id, opt.id))}
+                  className="relative flex w-full items-center justify-between p-2 font-mono text-xs"
+                >
+                  <span className="text-foreground z-10 flex items-center gap-2">
+                    {hasVoted && <span className="text-accent">✓</span>}
+                    {opt.label}
+                  </span>
+                  <span className="text-muted-foreground z-10">{pct}% ({count})</span>
+                </button>
+                
+                {!poll.isAnonymous && opt.votes.length > 0 && (
+                  <div className="z-10 relative px-2 pb-2 flex flex-wrap gap-1">
+                    {opt.votes.map((v, idx) => (
+                      <span key={idx} className="text-[10px] text-muted-foreground/80 font-mono">
+                        @{v.user?.username || v.userId}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}

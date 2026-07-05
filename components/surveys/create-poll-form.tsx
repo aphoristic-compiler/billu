@@ -8,6 +8,7 @@ export function CreatePollForm() {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const formRef = useRef<HTMLFormElement>(null)
+  const [options, setOptions] = useState(['', '', '', ''])
 
   if (!open) {
     return (
@@ -25,14 +26,17 @@ export function CreatePollForm() {
       ref={formRef}
       action={(formData) => {
         const question = formData.get('question') as string
-        const options = Array.from(formData.keys())
+        const optionsList = Array.from(formData.keys())
           .filter(k => k.startsWith('option_'))
           .map(k => formData.get(k) as string)
+          .filter(v => v.trim() !== '')
+        const isAnonymous = formData.get('isAnonymous') === 'on'
           
         startTransition(async () => {
           try {
-            await createStandalonePoll(question, options)
+            await createStandalonePoll(question, optionsList, isAnonymous)
             setOpen(false)
+            setOptions(['', '', '', ''])
             toast('Survey deployed.', 'success')
           } catch (e: any) {
             toast(e.message, 'error')
@@ -57,16 +61,37 @@ export function CreatePollForm() {
       />
       
       <div className="space-y-2">
-        {[1, 2, 3, 4].map((i) => (
+        {options.map((opt, i) => (
           <input
             key={i}
             name={`option_${i}`}
             type="text"
-            placeholder={`Option ${i}${i > 2 ? ' (optional)' : ''}`}
-            required={i <= 2}
+            value={opt}
+            onChange={(e) => {
+              const newOptions = [...options]
+              newOptions[i] = e.target.value
+              if (i === options.length - 1 && e.target.value.trim() !== '') {
+                newOptions.push('')
+              }
+              setOptions(newOptions)
+            }}
+            placeholder={`Option ${i + 1}${i >= 2 ? ' (optional)' : ''}`}
+            required={i < 2}
             className="w-full rounded border border-border bg-background px-3 py-1 font-mono text-xs focus:border-accent focus:outline-none"
           />
         ))}
+      </div>
+
+      <div className="flex items-center gap-2 px-1">
+        <input 
+          type="checkbox" 
+          id="isAnonymous" 
+          name="isAnonymous" 
+          className="accent-accent"
+        />
+        <label htmlFor="isAnonymous" className="font-mono text-xs text-muted-foreground select-none cursor-pointer hover:text-foreground">
+          Anonymous Survey (hides voters)
+        </label>
       </div>
 
       <button

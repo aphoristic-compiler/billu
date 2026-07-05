@@ -35,7 +35,7 @@ export async function getStandalonePolls() {
   }))
 }
 
-export async function createStandalonePoll(question: string, options: string[]) {
+export async function createStandalonePoll(question: string, options: string[], isAnonymous: boolean = false) {
   const user = await requireDbUser()
   if (!question.trim()) throw new Error('Question required')
   if (options.length < 2) throw new Error('At least 2 options required')
@@ -46,6 +46,7 @@ export async function createStandalonePoll(question: string, options: string[]) 
   const [poll] = await db.insert(polls).values({
     question,
     createdBy: user.id,
+    isAnonymous,
   }).returning()
 
   await db.insert(pollOptions).values(
@@ -162,4 +163,25 @@ export async function editPoll(pollId: string, question: string, options: string
   revalidatePath('/hub/surveys')
   revalidatePath('/hub/events')
   revalidatePath('/hub')
+}
+
+export async function blastPollToWing(pollId: string) {
+  const { broadcastToWing } = await import('./push');
+  const { queryMistral } = await import('@/lib/mistral');
+  const [poll] = await db.select().from(polls).where(eq(polls.id, pollId)).limit(1);
+  if (!poll) throw new Error('Poll not found');
+  
+  const response = await queryMistral([
+    { 
+      role: 'system', 
+      content: 'You are a witty, slightly sarcastic terminal assistant. The user just blasted a poll/survey to the team. Generate a very short (max 10 words) title, and a short witty body (max 20 words) for a push notification to alert the team to vote. Format your response exactly as TITLE|BODY. E.g. MARKET RESEARCH DETECTED|A new survey needs your input. Go vote.' 
+    },
+    { 
+      role: 'user', 
+      content: 'Poll question: ' + poll.question 
+    }
+  ], poll.createdBy);
+  
+  const [title, body] = (response?.content || 'NEW SURVEY|A new survey is available.').split('|');
+  await broadcastToWing(title.trim(), body?.trim() || 'Vote now.');
 }

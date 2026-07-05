@@ -283,6 +283,34 @@ export const aiToolsConfig = [
   {
     type: 'function',
     function: {
+      name: 'get_poll_details',
+      description: 'Get detailed options and voters for a specific market survey.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pollQuestion: { type: 'string', description: 'A snippet of the poll question' }
+        },
+        required: ['pollQuestion']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'blast_event',
+      description: 'Blast a specific event or microevent (sub-position) to the wing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventName: { type: 'string', description: 'Name of the event or microevent to blast' }
+        },
+        required: ['eventName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'add_microevent',
       description: 'Adds a microevent (e.g. dinner, specific location) to an existing parent event/trip.',
       parameters: {
@@ -466,6 +494,8 @@ export async function executeAiTool(name: string, args: any) {
       case 'get_full_leaderboard': return await ai_get_full_leaderboard();
       case 'list_wing_members': return await ai_list_wing_members();
       case 'list_market_surveys': return await ai_list_market_surveys(args);
+      case 'get_poll_details': return await ai_get_poll_details(args);
+      case 'blast_event': return await ai_blast_event(args);
       case 'log_system_leak': return await ai_log_system_leak(args);
       
       default: return JSON.stringify({ error: `Tool ${name} not found.` });
@@ -539,8 +569,12 @@ async function query_polls() {
   const activePolls = await db.query.polls.findMany({ with: { creator: true, options: { with: { votes: { with: { user: true } } } } } });
   if (activePolls.length === 0) return JSON.stringify({ message: "No active market surveys." });
   return JSON.stringify(activePolls.map((p: any) => ({
-    question: p.question, creator: p.creator?.username, isPinned: p.isPinned,
-    options: p.options.map((o: any) => ({ label: o.label, votes: o.votes.length, voters: o.votes.map((v: any) => v.user?.username) }))
+    question: p.question, creator: p.creator?.username, isPinned: p.isPinned, isAnonymous: p.isAnonymous,
+    options: p.options.map((o: any) => ({ 
+      label: o.label, 
+      votes: o.votes.length, 
+      voters: p.isAnonymous ? ['REDACTED (anonymous)'] : o.votes.map((v: any) => v.user?.username) 
+    }))
   })));
 }
 
@@ -1059,3 +1093,45 @@ async function ai_edit_expense(args: any) {
   }
 }
 
+async function ai_get_poll_details(args: any) {
+  try {
+    const poll = await db.query.polls.findFirst({
+      where: ilike(polls.question, `%${args.pollQuestion}%`),
+      with: { creator: true, options: { with: { votes: { with: { user: true } } } } }
+    });
+    
+    if (!poll) return JSON.stringify({ error: `Poll matching '${args.pollQuestion}' not found.` });
+
+    return JSON.stringify({
+      question: poll.question,
+      creator: poll.creator?.username,
+      isAnonymous: poll.isAnonymous,
+      options: poll.options.map((o: any) => ({
+        label: o.label,
+        votes: o.votes.length,
+        voters: poll.isAnonymous ? ['REDACTED (anonymous)'] : o.votes.map((v: any) => v.user?.username)
+      }))
+    });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_blast_event(args: any) {
+  try {
+    const { blastEventToWing } = await import('./events');
+    const existingEvent = await db.query.events.findFirst({
+      where: ilike(events.title, `%${args.eventName}%`),
+      orderBy: [desc(events.createdAt)]
+    });
+    
+    if (existingEvent) {
+      await blastEventToWing(existingEvent.id);
+      return JSON.stringify({ success: true, message: `Successfully blasted event '${existingEvent.title}' to the wing.` });
+    } else {
+      return JSON.stringify({ error: `Event matching '${args.eventName}' not found.` });
+    }
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}

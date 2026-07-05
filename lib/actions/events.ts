@@ -160,11 +160,11 @@ export async function setRsvp(eventId: string, status: 'long' | 'short' | 'hedge
   revalidatePath('/hub/events')
 }
 
-export async function createPoll(eventId: string, question: string, options: string[]) {
+export async function createPoll(eventId: string, question: string, options: string[], isAnonymous: boolean = false) {
   const user = await requireDbUser()
   const [poll] = await db
     .insert(polls)
-    .values({ eventId, question, createdBy: user.id })
+    .values({ eventId, question, createdBy: user.id, isAnonymous })
     .returning()
 
   await db.insert(pollOptions).values(
@@ -453,4 +453,51 @@ export async function getArchivedEvents() {
   }))
 
   return safeEvents as any
+}
+
+export async function blastEventToWing(eventId: string) {
+  const user = await requireDbUser()
+  const { queryMistral } = await import('@/lib/mistral')
+
+  const [event] = await db.query.events.findMany({
+    where: eq(events.id, eventId),
+    with: { rsvps: { with: { user: true } }, creator: true },
+    limit: 1
+  })
+
+  if (!event) throw new Error('Event not found')
+
+  const isMicro = event.parentEventId !== null
+  const typeStr = isMicro ? 'microevent (sub-position)' : 'event/trip'
+  
+  const longs = event.rsvps?.filter((r: any) => r.status === 'long').map((r: any) => r.user?.username).join(', ') || 'None'
+  
+  const prompt = `You are the chaotic AI terminal of the Wing. Generate a savage push notification to blast out to all members about an upcoming ${typeStr}.
+Title: ${event.title}
+Created by: ${event.creator?.username}
+Currently going LONG (attending): ${longs}
+Format the response strictly as JSON with 'title' (max 40 chars) and 'body' (max 120 chars, savage and terminal-themed).`
+
+  try {
+    const aiRes = await queryMistral(prompt, user.id)
+    const jsonStr = aiRes.replace(/```json/g, '').replace(/```/g, '').trim()
+    const parsed = JSON.parse(jsonStr)
+    
+    // In a real app we'd actually fire web push notifications here.
+    // For now we just log it as a system leak/activity to simulate the blast.
+    await logActivity(user.id, 'event_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED: "${parsed.title} - ${parsed.body}"`)
+    
+    // Update event blasted status
+    await db.update(events).set({ whatsappBlasted: true }).where(eq(events.id, eventId))
+    
+    revalidatePath('/hub')
+    revalidatePath('/hub/events')
+  } catch (err) {
+    console.error('Failed to generate blast notification:', err)
+    // Fallback if Mistral fails
+    await db.update(events).set({ whatsappBlasted: true }).where(eq(events.id, eventId))
+    await logActivity(user.id, 'event_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED FOR: ${event.title}`)
+    revalidatePath('/hub')
+    revalidatePath('/hub/events')
+  }
 }

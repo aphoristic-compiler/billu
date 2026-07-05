@@ -119,6 +119,7 @@ export const polls = pgTable("polls", {
     .references(() => users.id),
   isPinned: boolean("is_pinned").notNull().default(false),
   isArchived: boolean("is_archived").notNull().default(false),
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 })
 

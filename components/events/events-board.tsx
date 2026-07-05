@@ -12,9 +12,9 @@ import {
   createPoll,
   votePoll,
   addMicroEvent,
-  archiveEvent,
   updateEvent,
   toggleEventPin,
+  blastEventToWing,
 } from '@/lib/actions/events'
 import { addExpense, deleteExpense } from '@/lib/actions/expenses'
 import { saveVaultMedia } from '@/lib/actions/vault'
@@ -42,6 +42,7 @@ interface PollOption {
 interface Poll {
   id: string
   question: string
+  isAnonymous?: boolean
   options: PollOption[]
 }
 interface WingEvent {
@@ -168,34 +169,45 @@ function PollBlock({ poll, currentUserId }: { poll: Poll; currentUserId: string 
 
   return (
     <div className="mt-3 rounded border border-border/60 bg-background/40 p-3">
-      <p className="font-mono text-xs text-accent">[SURVEY] {poll.question}</p>
+      <p className="font-mono text-xs text-accent">
+        [SURVEY] {poll.question}
+        {poll.isAnonymous && <span className="ml-2 text-[10px] text-muted-foreground">[anonymous]</span>}
+      </p>
       <div className="mt-2 flex flex-col gap-1.5">
         {poll.options.map((opt) => {
           const pct = totalVotes ? Math.round((opt.votes.length / totalVotes) * 100) : 0
           const voted = opt.votes.some((v) => v.userId === currentUserId)
           return (
-            <button
-              key={opt.id}
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => votePoll(poll.id, opt.id))}
-              className={cn(
-                'relative overflow-hidden rounded border px-2 py-1.5 text-left font-mono text-xs transition-colors',
-                voted ? 'border-primary text-primary' : 'border-border/60 text-foreground/80 hover:border-foreground/40',
-              )}
-            >
-              <span
-                className="absolute inset-y-0 left-0 bg-primary/15"
-                style={{ width: `${pct}%` }}
-                aria-hidden="true"
-              />
-              <span className="relative flex justify-between gap-2">
-                <span>{opt.label}</span>
-                <span className="text-muted-foreground">
+            <div key={opt.id} className="relative">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => votePoll(poll.id, opt.id))}
+                className={cn(
+                  'relative flex w-full justify-between gap-2 overflow-hidden rounded border px-2 py-1.5 text-left font-mono text-xs transition-colors',
+                  voted ? 'border-primary text-primary' : 'border-border/60 text-foreground/80 hover:border-foreground/40',
+                )}
+              >
+                <span
+                  className="absolute inset-y-0 left-0 bg-primary/15"
+                  style={{ width: `${pct}%` }}
+                  aria-hidden="true"
+                />
+                <span className="relative z-10">{opt.label}</span>
+                <span className="relative z-10 text-muted-foreground">
                   {opt.votes.length} ({pct}%)
                 </span>
-              </span>
-            </button>
+              </button>
+              {!poll.isAnonymous && opt.votes.length > 0 && (
+                <div className="z-10 relative px-2 py-1 flex flex-wrap gap-1">
+                  {opt.votes.map((v, idx) => (
+                    <span key={idx} className="text-[10px] text-muted-foreground/80 font-mono">
+                      @{v.user?.username || v.userId}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           )
         })}
       </div>
@@ -208,6 +220,7 @@ function AddPollForm({ eventId }: { eventId: string }) {
   const [open, setOpen] = useState(false)
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState(['', ''])
+  const [isAnonymous, setIsAnonymous] = useState(false)
   const [pending, startTransition] = useTransition()
 
   if (!open) {
@@ -232,10 +245,11 @@ function AddPollForm({ eventId }: { eventId: string }) {
           return
         }
         startTransition(async () => {
-          await createPoll(eventId, question, options)
+          await createPoll(eventId, question, options, isAnonymous)
           setOpen(false)
           setQuestion('')
           setOptions(['', ''])
+          setIsAnonymous(false)
           terminalToast('Market survey deployed.')
         })
       }}
@@ -251,9 +265,14 @@ function AddPollForm({ eventId }: { eventId: string }) {
         <input
           key={i}
           value={opt}
-          onChange={(e) =>
-            setOptions((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))
-          }
+          onChange={(e) => {
+            const newOptions = [...options]
+            newOptions[i] = e.target.value
+            if (i === options.length - 1 && e.target.value.trim() !== '') {
+              newOptions.push('')
+            }
+            setOptions(newOptions)
+          }}
           placeholder={`option ${i + 1}`}
           className="rounded border border-input bg-background px-2 py-1.5 font-mono text-xs"
           aria-label={`Poll option ${i + 1}`}
@@ -267,6 +286,18 @@ function AddPollForm({ eventId }: { eventId: string }) {
         >
           + option
         </button>
+        <div className="flex items-center gap-1.5 ml-2">
+          <input 
+            type="checkbox" 
+            id={`isAnonymous-${eventId}`}
+            checked={isAnonymous}
+            onChange={(e) => setIsAnonymous(e.target.checked)}
+            className="accent-accent w-3 h-3"
+          />
+          <label htmlFor={`isAnonymous-${eventId}`} className="font-mono text-[10px] text-muted-foreground select-none cursor-pointer hover:text-foreground">
+            anonymous
+          </label>
+        </div>
         <div className="ml-auto flex gap-2">
           <button
             type="button"
@@ -463,61 +494,64 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
             <p className="mt-2 font-mono text-sm text-foreground/85 text-pretty">{event.description}</p>
           )}
         </div>
-        {event.createdBy === currentUserId && (
-          <div className="flex shrink-0 flex-col gap-1 items-end">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  try {
-                    await toggleEventPin(event.id)
-                    terminalToast(event.isPinned ? 'Position removed from watchlist.' : 'Position added to watchlist.')
-                  } catch (e: any) {
-                    terminalToast(e.message, 'error')
-                  }
-                })
-              }}
-              className="font-mono text-xs text-muted-foreground hover:text-warning"
-            >
-              {event.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setEditing(!editing)}
-              className="font-mono text-xs text-muted-foreground hover:text-foreground"
-            >
-              [edit]
-            </button>
-            <InlineConfirmButton
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  await deleteEvent(event.id)
-                  terminalToast('Position liquidated.', 'error')
-                })
-              }}
-              idleLabel="[liquidate]"
-              confirmLabel="[CONFIRM_LIQUIDATION?]"
-              idleClassName="font-mono text-xs text-muted-foreground hover:text-destructive"
-              confirmClassName="text-destructive font-bold"
-            />
-            <InlineConfirmButton
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  await archiveEvent(event.id)
-                  terminalToast('Position vaulted.', 'success')
-                })
-              }}
-              idleLabel="[liquidate & vault]"
-              confirmLabel="[CONFIRM_VAULT?]"
-              idleClassName="font-mono text-xs text-muted-foreground hover:text-profit"
-              confirmClassName="text-profit font-bold"
-            />
-          </div>
-        )}
+        <div className="flex shrink-0 flex-col gap-1 items-end self-start">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                try {
+                  await toggleEventPin(event.id)
+                  terminalToast(event.isPinned ? 'Position removed from watchlist.' : 'Position added to watchlist.')
+                } catch (e: any) {
+                  terminalToast(e.message, 'error')
+                }
+              })
+            }}
+            className="font-mono text-xs text-muted-foreground hover:text-warning"
+          >
+            {event.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
+          </button>
+          
+          {event.createdBy === currentUserId && (
+            <>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setEditing(!editing)}
+                className="font-mono text-xs text-muted-foreground hover:text-foreground"
+              >
+                [edit]
+              </button>
+              <InlineConfirmButton
+                disabled={pending}
+                onClick={() => {
+                  startTransition(async () => {
+                    await deleteEvent(event.id)
+                    terminalToast('Position liquidated.', 'error')
+                  })
+                }}
+                idleLabel="[liquidate]"
+                confirmLabel="[CONFIRM_LIQUIDATE?]"
+                idleClassName="text-muted-foreground hover:text-destructive"
+                confirmClassName="text-destructive font-bold"
+              />
+              <InlineConfirmButton
+                disabled={pending}
+                onClick={() => {
+                  startTransition(async () => {
+                    await archiveEvent(event.id)
+                    terminalToast('Position vaulted.', 'success')
+                  })
+                }}
+                idleLabel="[liquidate & vault]"
+                confirmLabel="[CONFIRM_VAULT?]"
+                idleClassName="font-mono text-xs text-muted-foreground hover:text-profit"
+                confirmClassName="text-profit font-bold"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {editing && (
@@ -612,6 +646,30 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
               {event.microEvents?.length || 0} sub-positions →
             </span>
           </Link>
+          <div className="mt-2 flex flex-col gap-1 px-1">
+            {event.microEvents?.map(micro => (
+              <div key={micro.id} className="flex justify-between items-center bg-card/50 p-2 rounded border border-border/40">
+                <span className="font-mono text-[10px] text-foreground">{micro.title}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        await blastEventToWing(micro.id)
+                        terminalToast('Blast sent to all operators.')
+                      } catch (e: any) {
+                        terminalToast(e.message, 'error')
+                      }
+                    })
+                  }}
+                  className="font-mono text-[10px] text-primary hover:text-accent transition-colors"
+                  title="Blast Microevent"
+                >
+                  [🚀 blast]
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -661,14 +719,23 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <RsvpControls event={event} currentUserId={currentUserId} />
-        <a
-          href={buildWhatsAppLink(event)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded border border-profit/60 px-3 py-1 font-mono text-xs text-profit hover:bg-profit/10"
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            startTransition(async () => {
+              try {
+                await blastEventToWing(event.id)
+                terminalToast('Blast sent to all operators.')
+              } catch (e: any) {
+                terminalToast(e.message, 'error')
+              }
+            })
+          }}
+          className="rounded border border-profit/60 px-3 py-1 font-mono text-xs text-profit hover:bg-profit/10 transition-colors"
         >
-          BLAST_TO_WHATSAPP →
-        </a>
+          BLAST_THE_INVESTORS {'->'}
+        </button>
       </div>
 
       {(longs.length > 0 || shorts.length > 0 || hedges.length > 0) && (
