@@ -57,6 +57,7 @@ export async function getDashboardData() {
       creator: true,
       rsvps: { with: { user: true } },
       expenses: { with: { payer: true, splits: { with: { user: true } } } },
+      microEvents: true,
       polls: {
         with: {
           options: { with: { votes: { with: { user: true } } } },
@@ -85,7 +86,7 @@ export async function getDashboardData() {
       userId: r.userId,
       user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
     })),
-    microEvents: [], // Don't need microevents for the dashboard widget
+    microEvents: (e.microEvents || []).map(m => ({ id: m.id })),
     polls: (e.polls || []).map((p) => ({
       id: p.id,
       question: p.question,
@@ -120,7 +121,7 @@ export async function getDashboardData() {
     id: p.id,
     question: p.question,
     isPinned: p.isPinned,
-    creator: p.creator ? { username: p.creator.username } : null,
+    creator: p.creator ? { id: p.creator.id, username: p.creator.username } : null,
     options: p.options.map(o => ({
       id: o.id,
       label: o.label,

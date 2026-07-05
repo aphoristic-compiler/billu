@@ -286,42 +286,27 @@ export async function getExpenses() {
 export async function settleDebts() {
   const user = await requireDbUser()
   
-  // Get all pending debts involving the user
-  const userDebts = await db.query.debts.findMany({
-    where: (d) => and(or(eq(d.fromUser, user.id), eq(d.toUser, user.id)), eq(d.status, 'pending')),
-  })
-  
-  if (userDebts.length === 0) return
+  const settlements = await getSimplifiedSettlements()
 
-  // Calculate pairwise net balances (positive means they owe me, negative means I owe them)
-  const balances = new Map<string, number>()
-  for (const d of userDebts) {
-    const otherId = d.fromUser === user.id ? d.toUser : d.fromUser
-    const amt = d.fromUser === user.id ? -d.amount : d.amount
-    balances.set(otherId, (balances.get(otherId) || 0) + amt)
-  }
-
-  // Mark all existing pending debts involving the user as settled
-  for (const debt of userDebts) {
-    await db
-      .update(debts)
-      .set({ status: 'settled', settledAt: new Date() })
-      .where(eq(debts.id, debt.id))
-  }
+  // Mark all existing pending debts across the network as settled
+  await db
+    .update(debts)
+    .set({ status: 'settled', settledAt: new Date() })
+    .where(eq(debts.status, 'pending'))
 
   // Insert simplified net debts
-  for (const [otherId, net] of balances.entries()) {
-    if (Math.abs(net) < 0.01) continue
-
-    await db.insert(debts).values({
-      fromUser: net > 0 ? otherId : user.id,
-      toUser: net > 0 ? user.id : otherId,
-      amount: Math.abs(net),
-      status: 'pending',
-    })
+  if (settlements.length > 0) {
+    await db.insert(debts).values(
+      settlements.map(s => ({
+        fromUser: s.fromId,
+        toUser: s.toId,
+        amount: s.amount,
+        status: 'pending',
+      }))
+    )
   }
   
-  await logActivity(user.id, 'debts_settled', `[RECONCILE] net balances simplified`)
+  await logActivity(user.id, 'debts_settled', `[RECONCILE] global network balances simplified greedily by @${user.username}`)
   revalidatePath('/hub')
   revalidatePath('/hub/ledger')
 }

@@ -18,6 +18,7 @@ import {
 } from '@/lib/actions/events'
 import { addExpense, deleteExpense } from '@/lib/actions/expenses'
 import { saveVaultMedia } from '@/lib/actions/vault'
+import { blastPollToWing } from '@/lib/actions/polls'
 import { CldUploadWidget } from 'next-cloudinary'
 import { toast as terminalToast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
@@ -169,10 +170,30 @@ function PollBlock({ poll, currentUserId }: { poll: Poll; currentUserId: string 
 
   return (
     <div className="mt-3 rounded border border-border/60 bg-background/40 p-3">
-      <p className="font-mono text-xs text-accent">
-        [SURVEY] {poll.question}
-        {poll.isAnonymous && <span className="ml-2 text-[10px] text-muted-foreground">[anonymous]</span>}
-      </p>
+      <div className="flex justify-between items-start gap-2">
+        <p className="font-mono text-xs text-accent">
+          [SURVEY] {poll.question}
+          {poll.isAnonymous && <span className="ml-2 text-[10px] text-muted-foreground">[anonymous]</span>}
+        </p>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            startTransition(async () => {
+              try {
+                await blastPollToWing(poll.id)
+                terminalToast('Survey blast sent to all operators.')
+              } catch (e: any) {
+                terminalToast(e.message, 'error')
+              }
+            })
+          }}
+          className="font-mono text-[10px] text-primary hover:text-accent transition-colors shrink-0"
+          title="Blast Survey"
+        >
+          [🚀 blast]
+        </button>
+      </div>
       <div className="mt-2 flex flex-col gap-1.5">
         {poll.options.map((opt) => {
           const pct = totalVotes ? Math.round((opt.votes.length / totalVotes) * 100) : 0
@@ -637,12 +658,12 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
         <div className="mt-4 border-t border-border/40 pt-4">
           <Link
             href={`/hub/events/${event.id}`}
-            className="group flex items-center justify-between rounded border border-accent/40 bg-accent/5 p-3 hover:bg-accent/10 transition-colors"
+            className="group flex items-center justify-between gap-2 rounded border border-accent/40 bg-accent/5 p-3 hover:bg-accent/10 transition-colors"
           >
-            <span className="font-mono text-sm text-accent font-bold tracking-widest">
+            <span className="font-mono text-sm text-accent font-bold tracking-widest break-words">
               [ENTER_TRIP_DESK]
             </span>
-            <span className="font-mono text-xs text-muted-foreground group-hover:text-accent transition-colors">
+            <span className="font-mono text-xs text-muted-foreground group-hover:text-accent transition-colors shrink-0 whitespace-nowrap text-right">
               {event.microEvents?.length || 0} sub-positions →
             </span>
           </Link>
@@ -673,8 +694,8 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
         </div>
       )}
 
-      <div className="mt-4 flex flex-col md:flex-row gap-3 items-start">
-        <details className="group min-w-0 flex-1 w-full">
+      <div className="mt-4 flex flex-wrap gap-3 items-start">
+        <details className="group">
           <summary className="cursor-pointer font-mono text-[10px] uppercase text-accent border border-accent/30 bg-accent/5 px-2 py-1 rounded hover:bg-accent/10 select-none inline-block">
             <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> EXPENSES ({event.expenses?.length || 0})
           </summary>
@@ -684,7 +705,7 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
           </div>
         </details>
 
-        <details className="group min-w-0 flex-1 w-full">
+        <details className="group">
           <summary className="cursor-pointer font-mono text-[10px] uppercase text-profit border border-profit/30 bg-profit/5 px-2 py-1 rounded hover:bg-profit/10 select-none inline-block">
             <span className="group-open:hidden">[+]</span><span className="hidden group-open:inline">[−]</span> VAULT MEDIA
           </summary>
