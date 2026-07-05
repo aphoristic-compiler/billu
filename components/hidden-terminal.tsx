@@ -67,7 +67,12 @@ export function HiddenTerminal() {
       }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onCustomOpen = () => setOpen((o) => !o)
+    window.addEventListener('open-terminal', onCustomOpen)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('open-terminal', onCustomOpen)
+    }
   }, [])
 
   useEffect(() => {

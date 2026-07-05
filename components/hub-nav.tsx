@@ -21,7 +21,13 @@ export function HubNav({ memberName }: { memberName: string }) {
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-4 py-2">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-sm font-bold text-primary">SATURO://</span>
+          <span 
+            className="font-mono text-sm font-bold text-primary cursor-pointer hover:text-primary/80 transition-colors"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-terminal'))}
+            title="Open Developer Terminal"
+          >
+            SATURO://
+          </span>
           <span className="hidden md:inline font-mono text-xs text-muted-foreground">
             wing_terminal v2.0
           </span>
