@@ -483,21 +483,45 @@ Format the response strictly as JSON with 'title' (max 40 chars) and 'body' (max
     const jsonStr = aiRes.replace(/```json/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)
     
-    // In a real app we'd actually fire web push notifications here.
-    // For now we just log it as a system leak/activity to simulate the blast.
-    await logActivity(user.id, 'event_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED: "${parsed.title} - ${parsed.body}"`)
+    const { broadcastToWing } = await import('./push')
+    const broadcastResult = await broadcastToWing(parsed.title, parsed.body)
     
-    // Update event blasted status
+    if (!broadcastResult.success) {
+      throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.')
+    }
+
+    await logActivity(user.id, 'event_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED: "${parsed.title} - ${parsed.body}"`)
     await db.update(events).set({ whatsappBlasted: true }).where(eq(events.id, eventId))
     
     revalidatePath('/hub')
     revalidatePath('/hub/events')
-  } catch (err) {
+    
+    return broadcastResult
+  } catch (err: any) {
     console.error('Failed to generate blast notification:', err)
-    // Fallback if Mistral fails
+    
+    // If it was a Web Push failure, throw it up
+    if (err.message && err.message.includes('Push failed') || err.message.includes('VAPID')) {
+      throw err;
+    }
+
+    // Fallback if Mistral fails, just use generic push
+    const { broadcastToWing } = await import('./push')
+    const genericTitle = `🚨 MARGIN CALL: ${event.category || event.type}`
+    const genericBody = `@${event.creator?.username} scheduled ${event.title || event.name}`
+    
+    const broadcastResult = await broadcastToWing(genericTitle, genericBody)
+    
+    if (!broadcastResult.success) {
+      throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.')
+    }
+
     await db.update(events).set({ whatsappBlasted: true }).where(eq(events.id, eventId))
     await logActivity(user.id, 'event_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED FOR: ${event.title}`)
+    
     revalidatePath('/hub')
     revalidatePath('/hub/events')
+    
+    return broadcastResult
   }
 }

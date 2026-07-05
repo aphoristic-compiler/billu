@@ -54,11 +54,15 @@ export function EventCard({ event, currentUserId }: EventCardProps) {
             <button
               onClick={async () => {
                 try {
-                  await broadcastToWing(
+                  const res = await broadcastToWing(
                     `🚨 MARGIN CALL: ${event.category || event.type}`,
                     `@${event.creator.username} just scheduled ${event.title || event.name}!`
                   );
-                  toast('Event blast sent to wing.');
+                  if (res && res.success) {
+                    toast(`Blast sent to ${res.count} operators.`);
+                  } else {
+                    toast(res?.error || 'Blast failed', 'error');
+                  }
                 } catch (e: any) {
                   toast(e.message || 'Blast failed', 'error');
                 }

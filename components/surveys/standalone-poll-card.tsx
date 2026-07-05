@@ -83,7 +83,7 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
                 try {
                   const res = await blastPollToWing(poll.id)
                   if (res && res.success) {
-                    toast('Blast sent to all operators.')
+                    toast(`Blast sent to ${res.count} operators.`)
                   } else {
                     toast(res?.error || 'Blast failed: Check server logs.', 'error')
                   }

@@ -540,10 +540,14 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
             onClick={() => {
               startTransition(async () => {
                 try {
-                  await blastEventToWing(event.id)
-                  terminalToast('Blast sent to all operators.')
+                  const res = await blastEventToWing(event.id)
+                  if (res && res.success) {
+                    terminalToast(`Blast sent to ${res.count} operators.`)
+                  } else {
+                    terminalToast(res?.error || 'Blast failed.', 'error')
+                  }
                 } catch (e: any) {
-                  terminalToast(e.message, 'error')
+                  terminalToast(e.message || 'Blast failed.', 'error')
                 }
               })
             }}
@@ -695,10 +699,14 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
                   onClick={() => {
                     startTransition(async () => {
                       try {
-                        await blastEventToWing(micro.id)
-                        terminalToast('Blast sent to all operators.')
+                        const res = await blastEventToWing(micro.id)
+                        if (res && res.success) {
+                          terminalToast(`Blast sent to ${res.count} operators.`)
+                        } else {
+                          terminalToast(res?.error || 'Blast failed.', 'error')
+                        }
                       } catch (e: any) {
-                        terminalToast(e.message, 'error')
+                        terminalToast(e.message || 'Blast failed.', 'error')
                       }
                     })
                   }}
