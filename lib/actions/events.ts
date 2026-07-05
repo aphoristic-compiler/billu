@@ -479,7 +479,7 @@ Currently going LONG (attending): ${longs}
 Format the response strictly as JSON with 'title' (max 40 chars) and 'body' (max 120 chars, savage and terminal-themed).`
 
   try {
-    const aiRes = await queryMistral(prompt, user.id)
+    const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id)
     const jsonStr = aiRes.replace(/```json/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)
     
