@@ -1,4 +1,4 @@
-﻿import { defaultCache } from "@serwist/next/worker";
+import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import { Serwist } from "serwist";
 
@@ -29,8 +29,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title || "SATURO:// ALERT", {
       body,
-      icon: icon || "/icon-192x192.png",
-      badge: "/icon-192x192.png",
+      icon: icon || "/terminal-icon.png",
+      badge: "/terminal-icon.png",
       vibrate: [200, 100, 200, 100, 200, 100, 200],
       data: { url },
     })
