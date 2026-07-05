@@ -330,17 +330,28 @@ export const aiToolsConfig = [
     type: 'function',
     function: {
       name: 'execute_transaction',
-      description: 'Logs a standalone financial transaction/expense.',
+      description: 'Logs a standalone financial transaction/expense with multiple splits.',
       parameters: {
         type: 'object',
         properties: {
           title: { type: 'string' },
-          amount: { type: 'number' },
+          totalAmount: { type: 'number' },
           payerUsername: { type: 'string' },
-          receiverUsername: { type: 'string' },
-          eventName: { type: 'string', description: 'Optional: Title of the event or microevent this transaction belongs to (e.g. dinner, poker game)' }
+          eventName: { type: 'string', description: 'Optional: Title of the event or microevent this transaction belongs to (e.g. dinner, poker game)' },
+          splits: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                username: { type: 'string' },
+                amount: { type: 'number' }
+              },
+              required: ['username', 'amount']
+            },
+            description: 'List of users involved and exactly how much they OWE towards the total. (e.g., if total is 1000 split equally between payer and another user, the other user owes 500. The payer can also be in the splits if they owe a share, but usually splits define what OTHERS owe. Make sure to include ALL splits that make up the total.)'
+          }
         },
-        required: ['title', 'amount', 'payerUsername', 'receiverUsername']
+        required: ['title', 'totalAmount', 'payerUsername', 'splits']
       }
     }
   },
@@ -818,9 +829,7 @@ async function ai_add_game_match(args: any) {
 async function ai_execute_transaction(args: any) {
   try {
     const payer = await db.query.users.findFirst({ where: eq(users.username, args.payerUsername) });
-    const receiver = await db.query.users.findFirst({ where: eq(users.username, args.receiverUsername) });
-    
-    if (!payer || !receiver) return JSON.stringify({ error: "Payer or receiver not found." });
+    if (!payer) return JSON.stringify({ error: "Payer not found." });
 
     let eventId = null;
     if (args.eventName) {
@@ -833,18 +842,24 @@ async function ai_execute_transaction(args: any) {
       }
     }
 
+    const allUsers = await db.query.users.findMany();
+    const mappedSplits = [];
+    for (const split of args.splits) {
+      const u = allUsers.find(u => u.username.toLowerCase() === split.username.toLowerCase());
+      if (!u) return JSON.stringify({ error: `User ${split.username} not found for splits.` });
+      mappedSplits.push({ userId: u.id, amount: split.amount });
+    }
+
     await addExpense({
       title: args.title,
-      totalAmount: args.amount,
+      totalAmount: args.totalAmount,
       paidBy: payer.id,
       eventId: eventId,
-      splits: [
-        { userId: receiver.id, amount: args.amount }
-      ]
+      splits: mappedSplits
     });
 
     const attachMsg = eventId ? ` attached to event.` : ``;
-    return JSON.stringify({ success: true, message: `Transaction logged: @${args.receiverUsername} owes @${args.payerUsername} ₹${args.amount}${attachMsg}` });
+    return JSON.stringify({ success: true, message: `Transaction logged: ${args.title} for ₹${args.totalAmount}${attachMsg}` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
