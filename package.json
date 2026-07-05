@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --no-turbo",
     "build": "tsx scripts/alter-polls.ts && next build",
     "start": "next start",
     "lint": "eslint .",
