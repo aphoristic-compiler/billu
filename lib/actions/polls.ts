@@ -94,7 +94,7 @@ export async function togglePollPin(pollId: string) {
     const pinnedPolls = await db.select().from(polls).where(eq(polls.isPinned, true))
     const totalCount = pinnedEvents.length + pinnedPolls.length
     if (totalCount >= 3) {
-      throw new Error('Watchlist is full (max 3 assets). Unwatch an asset first.')
+      throw new Error("Margin limit reached: Can't invest further, already diversified in 3 watched positions.")
     }
   }
 
