@@ -27,6 +27,20 @@ const LS_OUTPUT = `total 4
 -rw-------  poker_history.enc       ENCRYPTED
 -rw-r--r--  sleep_schedule          0 bytes`
 
+function parseTerminalText(text: string) {
+  // Simple parser to handle bold **text** and italic *text*
+  const parts = text.split(/(\*\*.*?\*\*|\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="text-foreground font-bold">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i} className="italic text-foreground">{part.slice(1, -1)}</em>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 export function HiddenTerminal() {
   const [open, setOpen] = useState(false)
   const [lines, setLines] = useState<TermLine[]>([
