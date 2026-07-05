@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { eq, desc, and, isNull } from 'drizzle-orm'
-import { db, polls, pollOptions, pollVotes } from '@/lib/db'
+import { db, polls, pollOptions, pollVotes, events } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 
 export async function getStandalonePolls() {
@@ -89,10 +89,9 @@ export async function togglePollPin(pollId: string) {
   if (poll.createdBy !== user.id) throw new Error('Only the creator can pin this poll')
 
   if (!poll.isPinned) {
-    // Check combined limit of 3
-    const eventsRes = await db.execute<{count: string}>(db.dialect.sql`SELECT count(*) FROM events WHERE is_pinned = true`)
-    const pollsRes = await db.execute<{count: string}>(db.dialect.sql`SELECT count(*) FROM polls WHERE is_pinned = true`)
-    const totalCount = Number(eventsRes[0].count) + Number(pollsRes[0].count)
+    const pinnedEvents = await db.select().from(events).where(eq(events.isPinned, true))
+    const pinnedPolls = await db.select().from(polls).where(eq(polls.isPinned, true))
+    const totalCount = pinnedEvents.length + pinnedPolls.length
     if (totalCount >= 3) {
       throw new Error('Watchlist is full (max 3 assets). Unwatch an asset first.')
     }

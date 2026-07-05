@@ -6,6 +6,7 @@ import { broadcastToWing } from '@/lib/actions/push'
 import { toast } from '@/components/terminal-toast'
 import { useState } from 'react'
 import { EditPollDialog } from './edit-poll-dialog'
+import { InlineConfirmButton } from '@/components/inline-confirm-button'
 
 interface PollOption {
   id: string
@@ -31,15 +32,21 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
 
   return (
     <div className="flex flex-col gap-2 rounded border border-border/40 bg-card/40 p-4">
-      <div className="flex justify-between items-start">
-        <p className="font-mono text-sm text-accent">
-          [MARKET_SURVEY] {poll.question}
-          {poll.isAnonymous && <span className="ml-2 text-xs text-muted-foreground">[anonymous]</span>}
-        </p>
-        <div className="flex gap-2">
+      <div className="flex justify-between items-start gap-4">
+        <div>
+          <p className="font-mono text-sm text-accent break-words">
+            <span className="text-primary/70 mr-1">[MARKET_SURVEY]</span>
+            {poll.question}
+            {poll.isAnonymous && <span className="ml-2 text-xs text-muted-foreground whitespace-nowrap">[anonymous]</span>}
+          </p>
           {poll.creator && (
-            <span className="font-mono text-xs text-muted-foreground">@{poll.creator.username}</span>
+            <p className="font-mono text-xs text-muted-foreground mt-1">
+              @{poll.creator.username}
+            </p>
           )}
+        </div>
+        
+        <div className="flex shrink-0 flex-col gap-1 items-end self-start">
           {poll.creator && poll.creator.id === currentUserId && (
             <button
               type="button"
@@ -79,47 +86,49 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
               {poll.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
             </button>
           )}
+          
+          {isCreator && (
+            <>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                [edit]
+              </button>
+              <InlineConfirmButton
+                disabled={pending}
+                onClick={() => startTransition(async () => {
+                  try {
+                    await archivePoll(poll.id)
+                    toast('Survey Vaulted.', 'success')
+                  } catch(e: any) {
+                    toast(e.message, 'error')
+                  }
+                })}
+                idleLabel="[liquidate & vault]"
+                confirmLabel="[CONFIRM_VAULT?]"
+                idleClassName="font-mono text-xs text-muted-foreground hover:text-profit transition-colors"
+                confirmClassName="text-profit font-bold text-xs font-mono"
+              />
+              <InlineConfirmButton
+                disabled={pending}
+                onClick={() => startTransition(async () => {
+                  try {
+                    await deletePoll(poll.id)
+                    toast('Survey Liquidated.', 'success')
+                  } catch(e: any) {
+                    toast(e.message, 'error')
+                  }
+                })}
+                idleLabel="[liquidate]"
+                confirmLabel="[CONFIRM_LIQUIDATE?]"
+                idleClassName="font-mono text-xs text-muted-foreground hover:text-destructive transition-colors"
+                confirmClassName="text-destructive font-bold text-xs font-mono"
+              />
+            </>
+          )}
         </div>
       </div>
-      
-      {isCreator && (
-        <div className="flex gap-2 text-xs border-b border-border/50 pb-2 mb-2">
-          <button
-            onClick={() => setIsEditing(true)}
-            className="text-muted-foreground hover:text-primary transition-colors"
-          >
-            [edit]
-          </button>
-          <button
-            disabled={pending}
-            onClick={() => startTransition(async () => {
-              try {
-                await archivePoll(poll.id)
-                toast('Survey Vaulted.', 'success')
-              } catch(e: any) {
-                toast(e.message, 'error')
-              }
-            })}
-            className="text-muted-foreground hover:text-warning transition-colors"
-          >
-            [vault]
-          </button>
-          <button
-            disabled={pending}
-            onClick={() => startTransition(async () => {
-              try {
-                await deletePoll(poll.id)
-                toast('Survey Liquidated.', 'success')
-              } catch(e: any) {
-                toast(e.message, 'error')
-              }
-            })}
-            className="text-muted-foreground hover:text-destructive transition-colors"
-          >
-            [liquidate]
-          </button>
-        </div>
-      )}
       <div className="mt-2 space-y-2">
         {poll.options.map((opt) => {
           const count = opt.votes.length
