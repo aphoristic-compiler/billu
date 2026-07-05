@@ -476,14 +476,19 @@ export async function blastEventToWing(eventId: string) {
   const prompt = `You are the sleek, cybernetic AI terminal of the Wing. Generate a cool, witty push notification to alert members about an upcoming ${typeStr}.
 Event Title: ${event.title}
 Start Time: ${startsAtStr}
+Location: ${event.location === 'other' ? (event.locationCustom || 'Unknown') : event.location}
 Created by: @${event.creator?.username}
 Going LONG: ${longs}
 
 Rules:
-- DO NOT hallucinate or make up random times (like "0700 HRS"). Use only the Start Time provided.
-- Avoid ALL CAPS. Use sleek, clean Title Case or sentence case.
-- Be witty and hacker-themed, but don't overdo the military vibe.
-- Format strictly as JSON with 'title' (max 40 chars) and 'body' (max 100 chars).`
+- Format strictly as JSON with 'title' and 'body'.
+- Use clean Title Case for the title (max 40 chars).
+- The 'body' MUST be formatted EXACTLY with these 4 lines using \n for line breaks:
+Line 1: A short, witty hacker-themed intro (e.g. "Terminal activated.")
+Line 2: Location: [insert location]
+Line 3: Time: [insert Start Time]
+Line 4: Notes: [witty comment about the event]
+- DO NOT hallucinate any times or places.`
 
   try {
     const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id)

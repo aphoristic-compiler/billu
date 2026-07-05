@@ -29,8 +29,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title || "SATURO:// ALERT", {
       body,
-      icon: icon || "/terminal-icon.png",
-      badge: "/terminal-icon.png",
+      icon: icon || "/push-icon.svg",
+      badge: "/push-badge.svg",
       vibrate: [200, 100, 200, 100, 200, 100, 200],
       requireInteraction: true,
       tag: "wing-alert",
