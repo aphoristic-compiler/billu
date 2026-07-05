@@ -480,7 +480,7 @@ Format the response strictly as JSON with 'title' (max 40 chars) and 'body' (max
 
   try {
     const aiRes = await queryMistral([{ role: 'user', content: prompt }], user.id)
-    const jsonStr = aiRes.replace(/```json/g, '').replace(/```/g, '').trim()
+    const jsonStr = aiRes.content.replace(/```json/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)
     
     const { broadcastToWing } = await import('./push')
