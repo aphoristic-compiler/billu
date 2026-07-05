@@ -392,7 +392,7 @@ export async function toggleEventPin(eventId: string) {
   if (!event.isPinned) {
     const pinnedEvents = await db.select().from(events).where(eq(events.isPinned, true))
     if (pinnedEvents.length >= 3) {
-      throw new Error('Maximum of 3 positions can be pinned to the watchlist at a time.')
+      throw new Error("Margin limit reached: Can't invest further, already diversified in 3 watched positions.")
     }
   }
 
