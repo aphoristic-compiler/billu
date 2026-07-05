@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react'
 import { addExpense, updateExpense } from '@/lib/actions/expenses'
 import { toast as terminalToast } from '@/components/terminal-toast'
-import { CandlestickButton } from '@/components/candlestick-button'
 
 interface Member {
   id: string
@@ -185,15 +184,15 @@ export function AddExpenseForm({
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="What was this for?"
-          className="flex-1 rounded border border-input bg-background px-3 py-2 font-mono text-xs focus:border-loss focus:outline-none focus:ring-1 focus:ring-loss/50"
+          className="w-full rounded border border-input bg-background px-3 py-2 font-mono text-xs focus:border-loss focus:outline-none focus:ring-1 focus:ring-loss/50"
           required
         />
-        <div className="relative w-full sm:w-32">
+        <div className="relative w-full">
           <span className="absolute left-3 top-2 text-muted-foreground font-mono text-xs">₹</span>
           <input
             value={amount}
@@ -302,13 +301,13 @@ export function AddExpenseForm({
       </div>
 
       <div className="mt-2 flex">
-        <CandlestickButton
+        <button
           type="submit"
-          isLoading={pending}
-          className="!border-loss !text-loss hover:!bg-loss/10 px-4 py-2 w-full max-w-full overflow-hidden"
+          disabled={pending}
+          className="w-full rounded bg-loss/10 border border-loss text-loss px-4 py-2 font-mono text-xs font-bold transition-colors hover:bg-loss/20 disabled:opacity-50"
         >
           {pending ? 'PROCESSING...' : (initialExpense ? 'UPDATE_EXPENSE' : 'COMMIT_EXPENSE')}
-        </CandlestickButton>
+        </button>
       </div>
     </form>
   )
