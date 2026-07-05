@@ -54,9 +54,11 @@ export default function LedgerPage() {
     }
   };
 
+  const currentUserId = members.find((m) => m.clerkId === user.id)?.id || '';
+
   const netBalance = debts
     .filter((d) => d.status === 'pending')
-    .reduce((sum, d) => sum + (d.fromUser === user.id ? -d.amount : d.amount), 0);
+    .reduce((sum, d) => sum + (d.fromUser === currentUserId ? -d.amount : d.amount), 0);
 
   return (
     <div className="space-y-4 font-mono text-xs">
@@ -88,11 +90,11 @@ export default function LedgerPage() {
                   <p className="text-secondary">{debt.status.toUpperCase()}</p>
                   <p className="text-accent">{Math.abs(debt.amount).toFixed(2)}</p>
                   <p className="text-tertiary">
-                    {debt.fromUser === user.id ? `YOU→@${debt.creditor?.username || '??'}` : `@${debt.debtor?.username || '??'}→YOU`}
+                    {debt.fromUser === currentUserId ? `YOU→@${debt.creditor?.username || '??'}` : `@${debt.debtor?.username || '??'}→YOU`}
                   </p>
                   {debt.note && <p className="text-tertiary italic">{debt.note}</p>}
                 </div>
-                {debt.status === 'pending' && debt.toUser === user.id && (
+                {debt.status === 'pending' && debt.toUser === currentUserId && (
                   <button
                     onClick={() => handleSettleSingle(debt.id)}
                     className="text-[10px] text-profit border border-profit/30 bg-profit/5 px-2 py-1 rounded hover:bg-profit/10"
@@ -141,7 +143,7 @@ export default function LedgerPage() {
 
       {members.length > 0 && (
         <div className="border border-accent/30 bg-background/50 p-4">
-          <AddExpenseForm members={members} currentUserId={user.id} />
+          <AddExpenseForm members={members} currentUserId={currentUserId} />
         </div>
       )}
 
