@@ -60,6 +60,27 @@ export async function createStandalonePoll(question: string, options: string[]) 
   revalidatePath('/hub')
 }
 
+export async function voteStandalonePoll(pollId: string, pollOptionId: string) {
+  const user = await requireDbUser()
+
+  // one vote per poll per user: remove any prior vote in this poll
+  const optionsInPoll = await db
+    .select({ id: pollOptions.id })
+    .from(pollOptions)
+    .where(eq(pollOptions.pollId, pollId))
+
+  for (const opt of optionsInPoll) {
+    await db
+      .delete(pollVotes)
+      .where(and(eq(pollVotes.pollOptionId, opt.id), eq(pollVotes.userId, user.id)))
+  }
+
+  await db.insert(pollVotes).values({ pollOptionId, userId: user.id }).onConflictDoNothing()
+  
+  revalidatePath('/hub/surveys')
+  revalidatePath('/hub')
+}
+
 export async function togglePollPin(pollId: string) {
   const user = await requireDbUser()
   const [poll] = await db.select().from(polls).where(eq(polls.id, pollId))

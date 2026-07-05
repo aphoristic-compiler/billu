@@ -66,7 +66,7 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => startTransition(() => voteStandalonePoll(opt.id))}
+                onClick={() => startTransition(() => voteStandalonePoll(poll.id, opt.id))}
                 className="relative flex w-full items-center justify-between p-2 font-mono text-xs"
               >
                 <span className="text-foreground z-10 flex items-center gap-2">
