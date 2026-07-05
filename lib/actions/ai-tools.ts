@@ -40,7 +40,7 @@ export const aiToolsConfig = [
       description: 'Get detailed pending debts for a specific user to see exactly who they owe and who owes them.',
       parameters: {
         type: 'object',
-        properties: { username: { type: 'string', description: 'The exact username of the person' } },
+        properties: { username: { type: 'string', description: 'The username or real name of the person' } },
         required: ['username']
       }
     }
@@ -531,7 +531,7 @@ async function get_vault_trip_expenses(eventId: string) {
 }
 
 async function get_user_financials(username: string) {
-  const targetUser = await db.query.users.findFirst({ where: eq(users.username, username) });
+  const targetUser = await db.query.users.findFirst({ where: or(eq(users.username, username.replace('@', '')), ilike(users.displayName, `%${username.replace('@', '')}%`)) });
   if (!targetUser) return JSON.stringify({ error: "User not found." });
   const pendingDebts = await db.query.debts.findMany({
     where: and(or(eq(debts.fromUser, targetUser.id), eq(debts.toUser, targetUser.id)), eq(debts.status, 'pending')),
@@ -583,7 +583,7 @@ async function query_polls() {
 // --------------------------------------------------------------------------------
 
 async function compile_roast_dossier(username: string) {
-  const targetUser = await db.query.users.findFirst({ where: eq(users.username, username) });
+  const targetUser = await db.query.users.findFirst({ where: or(eq(users.username, username.replace('@', '')), ilike(users.displayName, `%${username.replace('@', '')}%`)) });
   if (!targetUser) return JSON.stringify({ error: "User not found." });
 
   const financials = await get_user_financials(username);
@@ -645,8 +645,8 @@ async function calculate_systemic_risk() {
 }
 
 async function simulate_match_odds(player1: string, player2: string, gameName: string) {
-  const p1 = await db.query.users.findFirst({ where: eq(users.username, player1) });
-  const p2 = await db.query.users.findFirst({ where: eq(users.username, player2) });
+  const p1 = await db.query.users.findFirst({ where: or(eq(users.username, player1.replace('@', '')), ilike(users.displayName, `%${player1.replace('@', '')}%`)) });
+  const p2 = await db.query.users.findFirst({ where: or(eq(users.username, player2.replace('@', '')), ilike(users.displayName, `%${player2.replace('@', '')}%`)) });
   
   if (!p1 || !p2) return JSON.stringify({ error: "One or both players not found." });
 
@@ -693,7 +693,7 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
 }
 
 async function dig_up_dirt(username: string) {
-  const targetUser = await db.query.users.findFirst({ where: eq(users.username, username) });
+  const targetUser = await db.query.users.findFirst({ where: or(eq(users.username, username.replace('@', '')), ilike(users.displayName, `%${username.replace('@', '')}%`)) });
   if (!targetUser) return JSON.stringify({ error: "User not found." });
 
   // 1. Grinding stats (skipping)
@@ -870,7 +870,7 @@ async function ai_add_game_match(args: any) {
 
     const participantsData = [];
     for (const p of args.participants) {
-      const u = await db.query.users.findFirst({ where: eq(users.username, p.username) });
+      const u = await db.query.users.findFirst({ where: or(eq(users.username, p.username.replace('@', '')), ilike(users.displayName, `%${p.username.replace('@', '')}%`)) });
       if (u) {
         participantsData.push({
           userId: u.id,
@@ -896,7 +896,7 @@ async function ai_add_game_match(args: any) {
 
 async function ai_execute_transaction(args: any) {
   try {
-    const payer = await db.query.users.findFirst({ where: eq(users.username, args.payerUsername) });
+    const payer = await db.query.users.findFirst({ where: or(eq(users.username, args.payerUsername.replace('@', '')), ilike(users.displayName, `%${args.payerUsername.replace('@', '')}%`)) });
     if (!payer) return JSON.stringify({ error: "Payer not found." });
 
     let eventId = null;
@@ -1068,13 +1068,13 @@ async function ai_edit_expense(args: any) {
   try {
     const { expenseId, title, totalAmount, paidBy, splits } = args;
     
-    const payerUser = await db.query.users.findFirst({ where: eq(users.username, paidBy) });
+    const payerUser = await db.query.users.findFirst({ where: or(eq(users.username, paidBy.replace('@', '')), ilike(users.displayName, `%${paidBy.replace('@', '')}%`)) });
     if (!payerUser) return JSON.stringify({ error: `Payer user @${paidBy} not found.` });
 
     // map usernames to user IDs for the splits
     const finalSplits = [];
     for (const s of splits) {
-      const u = await db.query.users.findFirst({ where: eq(users.username, s.username) });
+      const u = await db.query.users.findFirst({ where: or(eq(users.username, s.username.replace('@', '')), ilike(users.displayName, `%${s.username.replace('@', '')}%`)) });
       if (!u) return JSON.stringify({ error: `User @${s.username} not found.` });
       finalSplits.push({ userId: u.id, amount: s.amount });
     }
