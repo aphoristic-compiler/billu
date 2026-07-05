@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { db, events, rsvps, polls, pollOptions, pollVotes, users, expenses, debts, matchParticipants } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
