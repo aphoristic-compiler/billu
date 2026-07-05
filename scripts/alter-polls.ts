@@ -17,7 +17,10 @@ async function main() {
     await sql`ALTER TABLE polls ADD COLUMN IF NOT EXISTS is_anonymous boolean NOT NULL DEFAULT false;`
     await sql`ALTER TABLE polls ALTER COLUMN event_id DROP NOT NULL;`
     await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_pinned boolean NOT NULL DEFAULT false;`
-    console.log("Success: Added all columns");
+    await sql`ALTER TYPE event_category ADD VALUE IF NOT EXISTS 'meal';`
+    await sql`ALTER TYPE event_category ADD VALUE IF NOT EXISTS 'event';`
+    await sql`ALTER TYPE event_category ADD VALUE IF NOT EXISTS 'hangout';`
+    console.log("Success: Added all columns and enum values");
   } catch (e: any) {
     if (e.message.includes('already exists')) {
       console.log("Column already exists");

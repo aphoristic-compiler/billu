@@ -2,17 +2,16 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 def draw_badge():
-    size = 180
+    size = 96
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Draw terminal prompt >_ in white for the badge
     # Draw ">"
-    points = [(40, 50), (90, 90), (40, 130)]
-    draw.line(points, fill=(255, 255, 255, 255), width=20, joint='curve')
+    points = [(24, 28), (48, 48), (24, 68)]
+    draw.line(points, fill=(255, 255, 255, 255), width=10, joint='curve')
     
     # Draw "_"
-    draw.rectangle([(90, 110), (140, 130)], fill=(255, 255, 255, 255))
+    draw.rectangle([(48, 58), (72, 68)], fill=(255, 255, 255, 255))
     
     img.save('public/push-badge.png')
 

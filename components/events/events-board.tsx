@@ -851,8 +851,11 @@ function CreateEventForm({ onClose }: { onClose: () => void }) {
           >
             <option value="treat">treat</option>
             <option value="dinner">dinner</option>
+            <option value="meal">meal</option>
             <option value="game">game night</option>
             <option value="outing">outing</option>
+            <option value="event">event</option>
+            <option value="hangout">hangout</option>
             <option value="trip">trip</option>
           </select>
         </label>

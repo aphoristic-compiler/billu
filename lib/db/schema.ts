@@ -21,6 +21,9 @@ export const eventCategoryEnum = pgEnum("event_category", [
   "game",
   "outing",
   "trip",
+  "meal",
+  "event",
+  "hangout",
 ])
 
 export const eventLocationEnum = pgEnum("event_location", [

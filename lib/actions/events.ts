@@ -479,9 +479,14 @@ export async function blastEventToWing(eventId: string) {
   const startsAtStr = event.startsAt ? new Date(event.startsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }) : 'TBD'
   
   const pendingDebts = await db.query.debts.findMany({
-    where: and(eq(debts.fromUser, event.createdBy), eq(debts.status, 'pending'))
+    where: and(or(eq(debts.fromUser, event.createdBy), eq(debts.toUser, event.createdBy)), eq(debts.status, 'pending'))
   });
-  const totalDebt = pendingDebts.reduce((sum, d) => sum + d.amount, 0);
+  
+  let netBalance = 0;
+  for (const d of pendingDebts) {
+    if (d.fromUser === event.createdBy) netBalance -= d.amount; // owes money
+    if (d.toUser === event.createdBy) netBalance += d.amount; // is owed money
+  }
 
   const gamesPlayed = await db.query.matchParticipants.findMany({
     where: eq(matchParticipants.userId, event.createdBy)
@@ -490,9 +495,11 @@ export async function blastEventToWing(eventId: string) {
   const gamesWon = gamesPlayed.filter(g => g.isWinner).length;
   
   const creatorStats = [];
-  if (totalDebt > 0) creatorStats.push(`Is currently in debt for ₹${totalDebt}.`);
+  if (netBalance < -0.01) creatorStats.push(`Is currently in net debt for ₹${Math.abs(netBalance).toFixed(2)}.`);
+  else if (netBalance > 0.01) creatorStats.push(`Has a positive net balance of ₹${netBalance.toFixed(2)} (others owe them money).`);
+  
   if (gamesPlayed.length > 0) creatorStats.push(`Gaming record: ${gamesWon} wins, ${gamesLost} losses.`);
-  const roastContext = creatorStats.length ? `\nContext to ruthlessly roast the creator: ${creatorStats.join(' ')} (e.g. if giving a treat but in debt, roast them hard. if losing games frequently, roast them).` : '';
+  const roastContext = creatorStats.length ? `\nContext to ruthlessly roast the creator: ${creatorStats.join(' ')} (e.g. if giving a treat but in debt, roast them hard. if giving a treat and others owe them money, mention their wealth. if losing games frequently, roast them).` : '';
 
   const prompt = `You are the sleek, cybernetic AI terminal of the Wing. Generate a cool, witty push notification to alert members about an upcoming ${typeStr}.
 Event Title: ${event.title}
@@ -517,7 +524,7 @@ Line 4: Notes: [savage comment about the event or creator]
     const parsed = JSON.parse(jsonStr)
     
     const { broadcastToWing } = await import('./push')
-    const broadcastResult = await broadcastToWing(parsed.title, parsed.body, '/hub', '/push-icon.png', '/push-badge.png')
+    const broadcastResult = await broadcastToWing(parsed.title, parsed.body, '/hub', '/push-icon.png?v=2', '/push-badge.png?v=2')
     
     if (!broadcastResult.success) {
       throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.')
@@ -542,7 +549,7 @@ Line 4: Notes: [savage comment about the event or creator]
     const { broadcastToWing } = await import('./push')
     const fallbackTitle = `🚨 MARGIN CALL: ${event.category || typeStr}`
     const fallbackBody = `@${event.creator.username} scheduled ${event.title}`
-    const broadcastResult = await broadcastToWing(fallbackTitle, fallbackBody, '/hub', '/push-icon.png', '/push-badge.png')
+    const broadcastResult = await broadcastToWing(fallbackTitle, fallbackBody, '/hub', '/push-icon.png?v=2', '/push-badge.png?v=2')
     
     if (!broadcastResult.success) {
       throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.')
