@@ -33,7 +33,7 @@ export async function getAnalyticsData() {
   const rsvpCounts = await db.execute(sql`
     SELECT user_id, COUNT(*) as count 
     FROM rsvps 
-    WHERE status = 'going'
+    WHERE status = 'long'
     GROUP BY user_id
     ORDER BY count DESC
     LIMIT 1
@@ -44,7 +44,7 @@ export async function getAnalyticsData() {
   const grindCounts = await db.execute(sql`
     SELECT user_id, COUNT(*) as count 
     FROM rsvps 
-    WHERE status = 'not_going' OR status = 'grinding'
+    WHERE status = 'short' OR status = 'hedge'
     GROUP BY user_id
     ORDER BY count DESC
     LIMIT 1
