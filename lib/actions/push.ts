@@ -43,7 +43,7 @@ export async function saveSubscription(userId: string, subscription: any) {
 export async function broadcastToWing(title: string, body: string, url: string = "/hub") {
   if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     console.warn("VAPID keys not configured, skipping broadcast")
-    return { success: false, error: "VAPID keys are missing in Vercel environment." }
+    throw new Error("VAPID keys are missing in Vercel environment.")
   }
 
   try {
@@ -64,14 +64,22 @@ export async function broadcastToWing(title: string, body: string, url: string =
           return db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id))
         }
         console.error("Failed to send push to endpoint:", sub.endpoint, err)
+        throw err;
       })
     })
 
-    await Promise.allSettled(promises)
+    const results = await Promise.allSettled(promises)
+    
+    // Check if any requests actually threw an error that wasn't 404/410 (which are handled natively)
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0 && failures.length === promises.length) {
+      throw new Error(`Push failed: All endpoints rejected. E.g. ${failures[0].reason?.message || failures[0].reason}`)
+    }
+
     return { success: true, count: allSubs.length }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error broadcasting push:", error)
-    return { success: false }
+    throw new Error(error.message || "Failed to broadcast push notification.")
   }
 }
 

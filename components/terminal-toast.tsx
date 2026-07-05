@@ -28,12 +28,12 @@ export function toast(message: string, variant: ToastVariant = 'info') {
 export function TerminalToast({ message, variant = 'info' }: { message: string; variant?: 'success' | 'warning' | 'info' }) {
   return (
     <div
-      className={`mt-2 border px-2 py-1 font-mono text-xs ${
+      className={`mt-2 border px-2 py-1 font-mono text-xs backdrop-blur-[10px] ${
         variant === 'success'
-          ? 'border-success bg-success/5 text-success'
+          ? 'border-success bg-success/10 text-success'
           : variant === 'warning'
-            ? 'border-warning bg-warning/5 text-warning'
-            : 'border-accent bg-accent/5 text-accent'
+            ? 'border-warning bg-warning/10 text-warning'
+            : 'border-accent bg-accent/10 text-accent'
       }`}
     >
       {message}
@@ -65,12 +65,12 @@ export function ToastHost() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`animate-slide-in-top w-full border font-mono text-xs px-3 py-2 ${
+          className={`animate-slide-in-top w-full border font-mono text-xs px-3 py-2 backdrop-blur-[10px] ${
             t.variant === 'success'
-              ? 'border-success bg-success/5 text-success'
+              ? 'border-success bg-success/10 text-success'
               : t.variant === 'warning'
-                ? 'border-warning bg-warning/5 text-warning'
-                : 'border-accent bg-accent/5 text-accent'
+                ? 'border-warning bg-warning/10 text-warning'
+                : 'border-accent bg-accent/10 text-accent'
           }`}
         >
           <span className="mr-2">

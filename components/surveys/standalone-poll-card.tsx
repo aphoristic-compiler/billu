@@ -81,8 +81,12 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
             onClick={() => {
               startTransition(async () => {
                 try {
-                  await blastPollToWing(poll.id)
-                  toast('Blast sent to all operators.')
+                  const res = await blastPollToWing(poll.id)
+                  if (res && res.success) {
+                    toast('Blast sent to all operators.')
+                  } else {
+                    toast(res?.error || 'Blast failed: Check server logs.', 'error')
+                  }
                 } catch (e: any) {
                   toast(e.message, 'error')
                 }

@@ -183,7 +183,12 @@ export async function blastPollToWing(pollId: string) {
   ], poll.createdBy);
   
   const [title, body] = (response?.content || 'NEW SURVEY|A new survey is available.').split('|');
-  await broadcastToWing(title.trim(), body?.trim() || 'Vote now.');
+  const broadcastResult = await broadcastToWing(title.trim(), body?.trim() || 'Vote now.');
   
+  if (!broadcastResult.success) {
+    throw new Error(broadcastResult.error || 'Push failed: Check VAPID keys on Vercel.');
+  }
+
   await logActivity(poll.createdBy, 'poll_blasted', `[BLAST] PUSH NOTIFICATION DISPATCHED FOR SURVEY: "${poll.question}"`)
+  return broadcastResult;
 }
