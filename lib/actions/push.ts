@@ -26,8 +26,18 @@ export async function saveSubscription(userId: string, subscription: any) {
       return { success: true }
     }
 
+    // Find the internal database user by Clerk ID
+    const dbUser = await db.query.users.findFirst({
+      where: (u, { eq }) => eq(u.clerkId, userId)
+    });
+
+    if (!dbUser) {
+      console.error("User not found in database for clerkId:", userId);
+      return { success: false, error: "User not synced to database yet." };
+    }
+
     await db.insert(pushSubscriptions).values({
-      userId,
+      userId: dbUser.id,
       endpoint: subscription.endpoint,
       p256dh: subscription.keys.p256dh,
       auth: subscription.keys.auth,
