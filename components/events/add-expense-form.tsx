@@ -246,8 +246,8 @@ export function AddExpenseForm({
           {members.map((m) => {
             const data = splits[m.id] || { selected: false, value: '' }
             return (
-              <div key={m.id} className="flex flex-wrap items-center justify-between p-1 hover:bg-card">
-                <label className="flex flex-1 items-center gap-2 cursor-pointer">
+              <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-1 hover:bg-card gap-1 sm:gap-2">
+                <label className="flex flex-1 items-center gap-2 cursor-pointer min-w-0">
                   {splitMode === 'equal' && (
                     <input
                       type="checkbox"
@@ -256,7 +256,7 @@ export function AddExpenseForm({
                       className="accent-loss"
                     />
                   )}
-                  <span className={`font-mono text-xs ${m.id === currentUserId ? 'text-accent' : 'text-foreground'}`}>
+                  <span className={`font-mono text-xs truncate ${m.id === currentUserId ? 'text-accent' : 'text-foreground'}`}>
                     {m.id === currentUserId ? 'You' : m.username}
                   </span>
                 </label>

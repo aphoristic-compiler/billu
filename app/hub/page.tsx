@@ -104,9 +104,9 @@ export default async function HubDashboard() {
           </Link>
 
           <Link href="/hub/analytics" className="group p-4 border border-border bg-card rounded-lg hover:border-blue-500 hover:bg-blue-500/5 transition-all">
-            <div className="flex items-center gap-3 mb-2 text-blue-500">
-              <Activity size={20} />
-              <h3 className="font-mono text-sm font-bold">SYSTEM_ANALYTICS</h3>
+            <div className="flex items-center gap-3 mb-2 text-blue-500 overflow-hidden">
+              <Activity size={20} className="shrink-0" />
+              <h3 className="font-mono text-sm font-bold truncate">SYSTEM_ANALYTICS</h3>
             </div>
             <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground/80 transition-colors">
               Wing-wide metrics and performance tracking.
