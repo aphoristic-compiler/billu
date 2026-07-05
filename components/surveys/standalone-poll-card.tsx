@@ -55,26 +55,24 @@ export function StandalonePollCard({ poll, currentUserId }: { poll: Poll; curren
         </div>
         
         <div className="flex shrink-0 flex-col gap-1 items-end self-start">
-          {poll.creator && poll.creator.id === currentUserId && (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  try {
-                    await blastPollToWing(poll.id)
-                    toast('Blast sent to all operators.')
-                  } catch (e: any) {
-                    toast(e.message, 'error')
-                  }
-                })
-              }}
-              className="font-mono text-xs text-primary hover:text-accent transition-colors whitespace-nowrap"
-              title="Blast Notification to Wing"
-            >
-              BLAST_THE_INVESTORS {'->'}
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                try {
+                  await blastPollToWing(poll.id)
+                  toast('Blast sent to all operators.')
+                } catch (e: any) {
+                  toast(e.message, 'error')
+                }
+              })
+            }}
+            className="font-mono text-xs text-muted-foreground hover:text-profit transition-colors whitespace-nowrap"
+            title="Blast Notification to Wing"
+          >
+            [🚀 blast]
+          </button>
           {poll.isPinned !== undefined && (
             <button
               type="button"

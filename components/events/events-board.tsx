@@ -188,7 +188,7 @@ function PollBlock({ poll, currentUserId }: { poll: Poll; currentUserId: string 
               }
             })
           }}
-          className="font-mono text-[10px] text-primary hover:text-accent transition-colors shrink-0"
+          className="font-mono text-xs text-muted-foreground hover:text-profit transition-colors shrink-0"
           title="Blast Survey"
         >
           [🚀 blast]
@@ -534,6 +534,25 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
             {event.isPinned ? '[📌 unwatch]' : '[📌 watch]'}
           </button>
           
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                try {
+                  await blastEventToWing(event.id)
+                  terminalToast('Blast sent to all operators.')
+                } catch (e: any) {
+                  terminalToast(e.message, 'error')
+                }
+              })
+            }}
+            className="font-mono text-xs text-muted-foreground hover:text-profit transition-colors"
+            title="Blast Event"
+          >
+            [🚀 blast]
+          </button>
+
           {event.createdBy === currentUserId && (
             <>
               <button
@@ -683,7 +702,7 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
                       }
                     })
                   }}
-                  className="font-mono text-[10px] text-primary hover:text-accent transition-colors"
+                  className="font-mono text-xs text-muted-foreground hover:text-profit transition-colors"
                   title="Blast Microevent"
                 >
                   [🚀 blast]
@@ -740,23 +759,6 @@ export function EventCard({ event, members, currentUserId, isTripDesk = false }:
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <RsvpControls event={event} currentUserId={currentUserId} />
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => {
-            startTransition(async () => {
-              try {
-                await blastEventToWing(event.id)
-                terminalToast('Blast sent to all operators.')
-              } catch (e: any) {
-                terminalToast(e.message, 'error')
-              }
-            })
-          }}
-          className="rounded border border-profit/60 px-3 py-1 font-mono text-xs text-profit hover:bg-profit/10 transition-colors"
-        >
-          BLAST_THE_INVESTORS {'->'}
-        </button>
       </div>
 
       {(longs.length > 0 || shorts.length > 0 || hedges.length > 0) && (

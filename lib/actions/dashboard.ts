@@ -86,7 +86,7 @@ export async function getDashboardData() {
       userId: r.userId,
       user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
     })),
-    microEvents: (e.microEvents || []).map(m => ({ id: m.id })),
+    microEvents: (e.microEvents || []).map(m => ({ id: m.id, title: m.title })),
     polls: (e.polls || []).map((p) => ({
       id: p.id,
       question: p.question,
