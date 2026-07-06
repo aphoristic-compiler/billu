@@ -221,7 +221,14 @@ export async function logCricketOver(matchId: string, inningNumber: number, bowl
   const [cm] = await db.select().from(cricketMatches).where(eq(cricketMatches.matchId, matchId))
   let [inning] = await db.select().from(cricketInnings).where(and(eq(cricketInnings.cricketMatchId, cm.id), eq(cricketInnings.inningNumber, inningNumber)))
   if (!inning) {
-    [inning] = await db.insert(cricketInnings).values({ cricketMatchId: cm.id, inningNumber, battingTeam: inningNumber === 1 ? cm.team1Name || '' : cm.team2Name || '', bowlingTeam: inningNumber === 1 ? cm.team2Name || '' : cm.team1Name || '' }).returning()
+    const batFirst = cm.battingFirst || cm.team1Name || '';
+    const batSecond = batFirst === cm.team1Name ? (cm.team2Name || '') : (cm.team1Name || '');
+    [inning] = await db.insert(cricketInnings).values({ 
+      cricketMatchId: cm.id, 
+      inningNumber, 
+      battingTeam: inningNumber === 1 ? batFirst : batSecond, 
+      bowlingTeam: inningNumber === 1 ? batSecond : batFirst 
+    }).returning()
   }
 
   const bowlerMp = await getOrCreateParticipant(matchId, bowlerId)
@@ -254,7 +261,14 @@ export async function logCricketBatter(matchId: string, inningNumber: number, ba
   const [cm] = await db.select().from(cricketMatches).where(eq(cricketMatches.matchId, matchId))
   let [inning] = await db.select().from(cricketInnings).where(and(eq(cricketInnings.cricketMatchId, cm.id), eq(cricketInnings.inningNumber, inningNumber)))
   if (!inning) {
-    [inning] = await db.insert(cricketInnings).values({ cricketMatchId: cm.id, inningNumber, battingTeam: inningNumber === 1 ? cm.team1Name || '' : cm.team2Name || '', bowlingTeam: inningNumber === 1 ? cm.team2Name || '' : cm.team1Name || '' }).returning()
+    const batFirst = cm.battingFirst || cm.team1Name || '';
+    const batSecond = batFirst === cm.team1Name ? (cm.team2Name || '') : (cm.team1Name || '');
+    [inning] = await db.insert(cricketInnings).values({ 
+      cricketMatchId: cm.id, 
+      inningNumber, 
+      battingTeam: inningNumber === 1 ? batFirst : batSecond, 
+      bowlingTeam: inningNumber === 1 ? batSecond : batFirst 
+    }).returning()
   }
 
   const batterMp = await getOrCreateParticipant(matchId, batterId)
