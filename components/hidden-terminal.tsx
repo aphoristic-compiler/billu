@@ -17,6 +17,7 @@ const HELP = `Available commands:
   rm -rf sleep_schedule   attempt cleanup
   history                 last 10 commands
   add_lore <name> <txt>   submit intel for a member
+  log <match_stats>       log live game updates
   <anything else>         ask Wing AI a question
   clear                   clear terminal
   exit                    attempt escape`

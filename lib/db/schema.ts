@@ -175,6 +175,8 @@ export const matches = pgTable("matches", {
     .references(() => users.id),
   playedAt: timestamp("played_at").notNull().defaultNow(),
   notes: text("notes"),
+  status: varchar("status", { length: 20 }).notNull().default("completed"),
+  maxOvers: integer("max_overs"), // used for cricket
   createdAt: timestamp("created_at").notNull().defaultNow(),
 })
 
@@ -190,6 +192,26 @@ export const matchParticipants = pgTable("match_participants", {
   teamName: varchar("team_name", { length: 100 }),
   stats: jsonb("stats").notNull().default({}),
   isWinner: boolean("is_winner").notNull().default(false),
+})
+
+export const matchRounds = pgTable("match_rounds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+  roundNumber: integer("round_number").notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // e.g., 'inning', 'set', 'round'
+  status: varchar("status", { length: 20 }).notNull().default("ongoing"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+})
+
+export const matchRoundStats = pgTable("match_round_stats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  matchRoundId: uuid("match_round_id").notNull().references(() => matchRounds.id, { onDelete: "cascade" }),
+  matchParticipantId: uuid("match_participant_id").notNull().references(() => matchParticipants.id, { onDelete: "cascade" }),
+  teamName: varchar("team_name", { length: 100 }),
+  role: varchar("role", { length: 50 }), // e.g., 'batting', 'bowling'
+  stats: jsonb("stats").notNull().default({}),
+  isWinner: boolean("is_winner").default(false),
 })
 
 // ─── 10. expenses ─────────────────────────────────────────────────────────
@@ -365,9 +387,10 @@ export const pollVotesRelations = relations(pollVotes, ({ one }) => ({
 export const matchesRelations = relations(matches, ({ one, many }) => ({
   game: one(games, { fields: [matches.gameId], references: [games.id] }),
   participants: many(matchParticipants),
+  rounds: many(matchRounds),
 }))
 
-export const matchParticipantsRelations = relations(matchParticipants, ({ one }) => ({
+export const matchParticipantsRelations = relations(matchParticipants, ({ one, many }) => ({
   match: one(matches, {
     fields: [matchParticipants.matchId],
     references: [matches.id],
@@ -376,6 +399,17 @@ export const matchParticipantsRelations = relations(matchParticipants, ({ one })
     fields: [matchParticipants.userId],
     references: [users.id],
   }),
+  roundStats: many(matchRoundStats),
+}))
+
+export const matchRoundsRelations = relations(matchRounds, ({ one, many }) => ({
+  match: one(matches, { fields: [matchRounds.matchId], references: [matches.id] }),
+  stats: many(matchRoundStats),
+}))
+
+export const matchRoundStatsRelations = relations(matchRoundStats, ({ one }) => ({
+  round: one(matchRounds, { fields: [matchRoundStats.matchRoundId], references: [matchRounds.id] }),
+  participant: one(matchParticipants, { fields: [matchRoundStats.matchParticipantId], references: [matchParticipants.id] }),
 }))
 
 export const expensesRelations = relations(expenses, ({ one, many }) => ({
