@@ -131,6 +131,30 @@ function CricketScorecard({ match }: any) {
     }
     return null;
   }
+
+  const getTargetStatus = (inning: any, index: number) => {
+    if (index > 0 && cm.innings[index - 1]) {
+      const target = cm.innings[index - 1].totalRuns + 1;
+      const runsNeeded = target - inning.totalRuns;
+      const maxOvers = cm.maxOvers || 20;
+      
+      // Calculate remaining balls directly (using 6 balls per over)
+      const totalBalls = maxOvers * 6;
+      const currentBalls = Math.round(inning.totalOvers * 6);
+      const ballsRemaining = Math.max(0, totalBalls - currentBalls);
+      const oversRemaining = ballsRemaining / 6;
+
+      if (runsNeeded <= 0) {
+        return "Target achieved!";
+      }
+      if (ballsRemaining <= 0) {
+        return `Failed to chase by ${runsNeeded} runs.`;
+      }
+      
+      return `Need ${runsNeeded} runs in ${oversRemaining.toFixed(1)} ov (${ballsRemaining} balls)`;
+    }
+    return null;
+  }
   
   return (
     <div className="mt-2 text-muted-foreground">
@@ -141,7 +165,14 @@ function CricketScorecard({ match }: any) {
             <span>Inning {inning.inningNumber} ({inning.battingTeam} vs {inning.bowlingTeam})</span>
             {getTarget(inning, idx) !== null && <span className="text-xs text-profit font-bold">Target: {getTarget(inning, idx)}</span>}
           </p>
-          <p className="text-accent text-lg">{inning.totalRuns}/{inning.totalWickets} <span className="text-xs text-muted-foreground">({inning.totalOvers.toFixed(1)} Ov)</span></p>
+          <p className="text-accent text-lg">
+            {inning.totalRuns}/{inning.totalWickets} <span className="text-xs text-muted-foreground">({inning.totalOvers.toFixed(1)} Ov)</span>
+          </p>
+          {getTargetStatus(inning, idx) && (
+            <p className="text-xs text-profit font-bold mt-1 animate-pulse">
+              ➔ {getTargetStatus(inning, idx)}
+            </p>
+          )}
           {inning.isDeclared && <p className="text-[10px] text-profit border border-profit px-1 inline-block mt-1">DECLARED</p>}
         </div>
       ))}
