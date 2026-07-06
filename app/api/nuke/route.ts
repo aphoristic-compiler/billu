@@ -7,8 +7,8 @@ import { getCurrentDbUser } from '@/lib/auth'
 export async function GET() {
   try {
     const user = await getCurrentDbUser()
-    if (!user || user.username !== 'green_vitriol_') {
-      return new NextResponse('Unauthorized - Only green_vitriol_ can access this route', { status: 401 })
+    if (!user || (user.username !== 'green_vitriol' && user.username !== 'green_vitriol_')) {
+      return new NextResponse('Unauthorized - Only green_vitriol can access this route', { status: 401 })
     }
     // 1. Delete all Clerk users
     const client = await clerkClient()

@@ -6,8 +6,8 @@ import { getCurrentDbUser } from '@/lib/auth'
 export async function GET() {
   try {
     const user = await getCurrentDbUser()
-    if (!user || user.username !== 'green_vitriol_') {
-      return new NextResponse('Unauthorized - Only green_vitriol_ can access this route', { status: 401 })
+    if (!user || (user.username !== 'green_vitriol' && user.username !== 'green_vitriol_')) {
+      return new NextResponse('Unauthorized - Only green_vitriol can access this route', { status: 401 })
     }
     // Attempt to manually apply the missing columns in production
     await db.execute(sql`
