@@ -521,6 +521,14 @@ export const aiToolsConfig = [
         required: ['setNumber', 'team1Player1', 'team1Score', 'team2Player1', 'team2Score']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_ongoing_matches',
+      description: 'Fetch all active/ongoing matches currently being played (e.g. Cricket, Badminton, Cards, Poker). Use this to see what matches are currently live.',
+      parameters: { type: 'object', properties: {} }
+    }
   }
 ];
 
@@ -533,6 +541,7 @@ export async function executeAiTool(name: string, args: any) {
       case 'query_game_tracker': return await query_game_tracker();
       case 'query_active_events': return await query_active_events();
       case 'query_polls': return await query_polls();
+      case 'query_ongoing_matches': return await query_ongoing_matches();
       case 'compile_roast_dossier': return await compile_roast_dossier(args.username);
       case 'calculate_systemic_risk': return await calculate_systemic_risk();
       case 'simulate_match_odds': return await simulate_match_odds(args.player1, args.player2, args.gameName);
@@ -643,6 +652,32 @@ async function query_polls() {
       label: o.label, 
       votes: o.votes.length, 
       voters: p.isAnonymous ? ['REDACTED (anonymous)'] : o.votes.map((v: any) => v.user?.username) 
+    }))
+  })));
+}
+
+async function query_ongoing_matches() {
+  const ongoing = await db.query.matches.findMany({
+    where: eq(matches.status, 'ongoing'),
+    with: { game: true, participants: { with: { user: true } }, cricketMatches: true }
+  });
+  if (ongoing.length === 0) return JSON.stringify({ message: "No ongoing matches right now." });
+  return JSON.stringify(ongoing.map((m: any) => ({
+    id: m.id,
+    game: m.game?.name,
+    notes: m.notes,
+    playedAt: m.playedAt,
+    cricketDetails: m.cricketMatches?.[0] ? {
+      format: m.cricketMatches[0].format,
+      maxOvers: m.cricketMatches[0].maxOvers,
+      team1Name: m.cricketMatches[0].team1Name,
+      team2Name: m.cricketMatches[0].team2Name,
+      tossWinner: m.cricketMatches[0].tossWinner,
+      battingFirst: m.cricketMatches[0].battingFirst
+    } : null,
+    participants: m.participants.map((p: any) => ({
+      username: p.user?.username,
+      teamName: p.teamName
     }))
   })));
 }

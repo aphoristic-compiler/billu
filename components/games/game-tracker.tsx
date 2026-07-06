@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { logMatch, completeOngoingMatch, logCricketOver, logCricketBatter, logBadmintonSet, logCardsRound, logPokerLedger, deleteMatch } from '@/lib/actions/matches'
 import { CandlestickButton } from '@/components/candlestick-button'
@@ -123,13 +123,23 @@ function OngoingMatchCard({ match, members }: any) {
 function CricketScorecard({ match }: any) {
   const cm = match.cricketMatches?.[0]
   if (!cm) return null
+  
+  // Calculate target for chasing innings
+  const getTarget = (currentInning: any, index: number) => {
+    if (index > 0 && cm.innings[index - 1]) {
+      return cm.innings[index - 1].totalRuns + 1;
+    }
+    return null;
+  }
+  
   return (
     <div className="mt-2 text-muted-foreground">
       <p className="font-bold mb-1">Format: {cm.format} ({cm.maxOvers} Overs)</p>
-      {cm.innings?.map((inning: any) => (
+      {cm.innings?.map((inning: any, idx: number) => (
         <div key={inning.id} className="mb-2 p-2 bg-background border border-border rounded">
-          <p className="text-foreground font-bold">
-            Inning {inning.inningNumber} ({inning.battingTeam} vs {inning.bowlingTeam})
+          <p className="text-foreground font-bold flex justify-between">
+            <span>Inning {inning.inningNumber} ({inning.battingTeam} vs {inning.bowlingTeam})</span>
+            {getTarget(inning, idx) !== null && <span className="text-xs text-profit font-bold">Target: {getTarget(inning, idx)}</span>}
           </p>
           <p className="text-accent text-lg">{inning.totalRuns}/{inning.totalWickets} <span className="text-xs text-muted-foreground">({inning.totalOvers.toFixed(1)} Ov)</span></p>
           {inning.isDeclared && <p className="text-[10px] text-profit border border-profit px-1 inline-block mt-1">DECLARED</p>}
@@ -175,6 +185,25 @@ function LogRoundForm({ match, members, onClose }: any) {
 
   const battingPlayers = match.participants?.filter((p: any) => p.teamName === currentBattingTeam) || []
   const bowlingPlayers = match.participants?.filter((p: any) => p.teamName === currentBowlingTeam) || []
+
+  // Auto switch inning based on wickets and overs
+  useEffect(() => {
+    if (!cm || !cm.innings || cm.innings.length === 0) return;
+    const sorted = [...cm.innings].sort((a, b) => b.inningNumber - a.inningNumber);
+    const latest = sorted[0];
+    
+    const battingTeamPlayersCount = match.participants?.filter((p: any) => p.teamName === latest.battingTeam).length || 11;
+    const maxWickets = Math.max(1, Math.min(10, battingTeamPlayersCount - 1));
+    
+    const isAllOut = latest.totalWickets >= maxWickets;
+    const isMaxOvers = latest.totalOvers >= (cm.maxOvers || 20);
+    
+    if (latest.inningNumber === 1 && (isAllOut || isMaxOvers || latest.isCompleted)) {
+      setInningNumber(2);
+    } else {
+      setInningNumber(latest.inningNumber);
+    }
+  }, [match, cm]);
 
   const submitOver = () => {
     startTransition(async () => {
@@ -407,6 +436,7 @@ function RecordMatchForm({ games, members, onClose }: any) {
   const [tossWinner, setTossWinner] = useState('')
   const [tossDecision, setTossDecision] = useState('Bat')
   const [battingFirst, setBattingFirst] = useState('')
+  const [tossWasSimulated, setTossWasSimulated] = useState(false)
 
   const startMatch = () => {
     startTransition(async () => {
@@ -437,14 +467,8 @@ function RecordMatchForm({ games, members, onClose }: any) {
 
   const simulateToss = () => {
     const winner = Math.random() < 0.5 ? cricketForm.team1 : cricketForm.team2;
-    const decision = Math.random() < 0.5 ? 'Bat' : 'Bowl';
     setTossWinner(winner);
-    setTossDecision(decision);
-    if (winner === cricketForm.team1) {
-      setBattingFirst(decision === 'Bat' ? cricketForm.team1 : cricketForm.team2);
-    } else {
-      setBattingFirst(decision === 'Bat' ? cricketForm.team2 : cricketForm.team1);
-    }
+    setTossWasSimulated(true);
   }
 
   return (
@@ -503,6 +527,10 @@ function RecordMatchForm({ games, members, onClose }: any) {
             <div>
               <label className="block text-accent mb-1 font-bold">Toss Winner</label>
               <select value={tossWinner} onChange={e => {
+                if (tossWasSimulated) {
+                  toast("Nice try, fraud. The toss was simulated. Play fair or go home.", "error");
+                  return;
+                }
                 setTossWinner(e.target.value);
                 if (e.target.value === cricketForm.team1) {
                   setBattingFirst(tossDecision === 'Bat' ? cricketForm.team1 : cricketForm.team2);
@@ -534,7 +562,7 @@ function RecordMatchForm({ games, members, onClose }: any) {
           <div className="flex gap-2 mt-2 items-center">
             <button type="button" onClick={simulateToss} className="bg-secondary text-background text-[10px] px-2 py-1 rounded">SIMULATE TOSS</button>
             <div className="text-[10px] text-muted-foreground">
-              {tossWinner ? `${tossWinner} won the toss & elected to ${tossDecision === 'Bat' ? 'bat' : 'field'}` : 'No toss simulated'}
+              {tossWinner ? `${tossWinner} won the toss` : 'No toss simulated'}
             </div>
           </div>
           
