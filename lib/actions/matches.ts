@@ -64,7 +64,8 @@ export async function logMatch(input: {
     .values({
       gameId: input.gameId,
       status: input.status || 'completed',
-      notes: input.notes,
+        notes: input.notes,
+        createdBy: user.id,
     })
     .returning()
 
@@ -239,17 +240,24 @@ export async function logCricketBatter(matchId: string, inningNumber: number, ba
   }
 }
 
-export async function logBadmintonSet(matchId: string, setNumber: number, p1Id: string, score1: number, p2Id: string, score2: number) {
-  const mp1 = await getOrCreateParticipant(matchId, p1Id)
-  const mp2 = await getOrCreateParticipant(matchId, p2Id)
-  const winnerId = score1 > score2 ? mp1.id : score2 > score1 ? mp2.id : null
+export async function logBadmintonSet(matchId: string, setNumber: number, team1: string[], score1: number, team2: string[], score2: number) {
+  const mp1_1 = await getOrCreateParticipant(matchId, team1[0])
+  const mp1_2 = team1[1] ? await getOrCreateParticipant(matchId, team1[1]) : null
+  const mp2_1 = await getOrCreateParticipant(matchId, team2[0])
+  const mp2_2 = team2[1] ? await getOrCreateParticipant(matchId, team2[1]) : null
+
+  // Winner logic: pick team 1 or team 2 based on score, we just set the first player as the "winnerId" for simplicity in determining match outcome later, or we can use another method. 
+  // Wait, if it's doubles, we just need a way to track set wins. Let's just track the first player of the winning team.
+  const winnerId = score1 > score2 ? mp1_1.id : score2 > score1 ? mp2_1.id : null
 
   await db.insert(badmintonSets).values({
     matchId,
     setNumber,
-    player1Id: mp1.id,
+    player1Id: mp1_1.id,
+    team1Player2Id: mp1_2?.id,
     score1,
-    player2Id: mp2.id,
+    player2Id: mp2_1.id,
+    team2Player2Id: mp2_2?.id,
     score2,
     winnerId
   })

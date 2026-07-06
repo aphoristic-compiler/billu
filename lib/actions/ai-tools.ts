@@ -920,12 +920,24 @@ async function ai_log_badminton_set(args: any) {
     const badmintonMatch = ongoingMatches.find(m => m.game?.name === 'Badminton');
     if (!badmintonMatch) return JSON.stringify({ error: 'No ongoing badminton match found.' });
 
-    const p1 = await db.query.users.findFirst({ where: or(eq(users.username, args.team1Player.replace('@', '')), ilike(users.displayName, `%${args.team1Player.replace('@', '')}%`)) });
-    const p2 = await db.query.users.findFirst({ where: or(eq(users.username, args.team2Player.replace('@', '')), ilike(users.displayName, `%${args.team2Player.replace('@', '')}%`)) });
+    const resolveUser = async (username: string) => {
+      if (!username) return null;
+      return await db.query.users.findFirst({ where: or(eq(users.username, username.replace('@', '')), ilike(users.displayName, `%${username.replace('@', '')}%`)) });
+    }
 
-    if (!p1 || !p2) return JSON.stringify({ error: "Players not found." });
+    const t1p1 = await resolveUser(args.team1Player1);
+    const t1p2 = await resolveUser(args.team1Player2);
+    const t2p1 = await resolveUser(args.team2Player1);
+    const t2p2 = await resolveUser(args.team2Player2);
 
-    await logBadmintonSet(badmintonMatch.id, args.setNumber, p1.id, args.team1Score, p2.id, args.team2Score);
+    if (!t1p1 || !t2p1) return JSON.stringify({ error: "At least one player per team is required." });
+
+    const team1 = [t1p1.id];
+    if (t1p2) team1.push(t1p2.id);
+    const team2 = [t2p1.id];
+    if (t2p2) team2.push(t2p2.id);
+
+    await logBadmintonSet(badmintonMatch.id, args.setNumber, team1, args.team1Score, team2, args.team2Score);
 
     return JSON.stringify({ message: `Logged badminton set ${args.setNumber} successfully.` });
   } catch (err: any) {
