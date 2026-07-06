@@ -587,6 +587,26 @@ export async function executeAiTool(name: string, args: any) {
 // EXISTING TOOLS
 // --------------------------------------------------------------------------------
 
+
+async function getLoreRoastsForUsers(usernames: string[]): Promise<string> {
+  try {
+    if (usernames.length === 0) return "";
+    const cleanNames = usernames.map(u => u.trim().replace('@', ''));
+    const leaks: any[] = [];
+    for (const name of cleanNames) {
+      const matched = await db.query.systemLeaks.findMany({
+        where: ilike(systemLeaks.memberName, `%${name}%`)
+      });
+      leaks.push(...matched);
+    }
+    if (leaks.length === 0) return "";
+    const leak = leaks[Math.floor(Math.random() * leaks.length)];
+    return `[LORE DOSSIER ROAST ALERT: @${leak.memberName} - ${leak.title}: "${leak.body}"]`;
+  } catch (e) {
+    return "";
+  }
+}
+
 async function search_vault(query: string) {
   const q = `%${query}%`;
   const results = await db.query.events.findMany({
@@ -836,8 +856,11 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
   const t1Stats = t1.map(u => getPlayerStats(u.id));
   const t2Stats = t2.map(u => getPlayerStats(u.id));
 
-  const t1AvgWinRate = t1Stats.reduce((sum, s) => sum + s.rate, 0) / t1Stats.length;
-  const t2AvgWinRate = t2Stats.reduce((sum, s) => sum + s.rate, 0) / t2Stats.length;
+  let t1OddsScore = t1Stats.reduce((sum, s) => sum + s.rate, 0) / t1Stats.length;
+  let t2OddsScore = t2Stats.reduce((sum, s) => sum + s.rate, 0) / t2Stats.length;
+
+  const t1AvgWinRate = t1OddsScore;
+  const t2AvgWinRate = t2OddsScore;
 
   // 4. Calculate direct Head-to-Head (H2H) records between Team 1 and Team 2 in this game.
   // Group participations by matchId
@@ -883,10 +906,6 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
     }
   }
 
-  // 5. Predict match odds based on win rates and H2H weights
-  let t1OddsScore = t1AvgWinRate;
-  let t2OddsScore = t2AvgWinRate;
-
   let h2hVerdict = "No historical head-to-head records found between these teams in " + gameName + ".";
 
   if (h2hTotal > 0) {
@@ -899,6 +918,61 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
 
     h2hVerdict = `Head-to-head record in ${gameName}: Team 1 won ${t1H2HWins} times, Team 2 won ${t2H2HWins} times.`;
   }
+
+  // 5. Fetch Degen Factors (debts & RSVPs) and apply adjustment
+  const getDegenFactors = async (usersList: any[]) => {
+    let totalDebt = 0;
+    let shortCount = 0;
+    let longCount = 0;
+    const userDetails: string[] = [];
+
+    for (const u of usersList) {
+      // Debts
+      const pendingDebts = await db.query.debts.findMany({
+        where: and(eq(debts.fromUser, u.id), eq(debts.status, 'pending'))
+      });
+      const uDebt = pendingDebts.reduce((sum, d) => sum + Number(d.amount), 0);
+      totalDebt += uDebt;
+
+      // RSVPs
+      const userRsvps = await db.query.rsvps.findMany({
+        where: eq(rsvps.userId, u.id)
+      });
+      const uShort = userRsvps.filter(r => r.status === 'short' || r.status === 'hedge').length;
+      const uLong = userRsvps.filter(r => r.status === 'long').length;
+      shortCount += uShort;
+      longCount += uLong;
+
+      const traits = [];
+      if (uDebt > 0) traits.push(`₹${uDebt} debt`);
+      if (uShort > 0) traits.push(`${uShort} grinds`);
+      if (uLong > 0) traits.push(`${uLong} parties`);
+      userDetails.push(`@${u.username} (${traits.join(', ') || 'clean record'})`);
+    }
+
+    // Party penalty: -2% per event (max -10% total)
+    // Grind bonus: +3% per event (max +15% total)
+    // Debt distress penalty: -1.5% per 1000 INR (max -20% total)
+    const partyPenalty = Math.min(10, longCount * 2.0);
+    const grindBonus = Math.min(15, shortCount * 3.0);
+    const debtPenalty = Math.min(20, (totalDebt / 1000) * 1.5);
+    const netAdjustment = grindBonus - partyPenalty - debtPenalty;
+
+    return {
+      totalDebt,
+      shortCount,
+      longCount,
+      netAdjustment,
+      details: userDetails.join(' | ')
+    };
+  };
+
+  const t1Degen = await getDegenFactors(t1);
+  const t2Degen = await getDegenFactors(t2);
+
+  // Apply degen factors
+  t1OddsScore = Math.max(0.05, t1OddsScore + (t1Degen.netAdjustment / 100));
+  t2OddsScore = Math.max(0.05, t2OddsScore + (t2Degen.netAdjustment / 100));
 
   // Scale to percentages
   const sumOdds = t1OddsScore + t2OddsScore;
@@ -935,7 +1009,7 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
         
         // standard baseline score 140
         const diff = projected - 140;
-        // Adjust probabilities
+        // Adjust probabilities (taking degen factors into account too)
         let liveScoreAdjustment = diff * 0.4 - currentWickets * 3;
         liveScoreAdjustment = Math.max(-40, Math.min(40, liveScoreAdjustment));
         
@@ -1025,34 +1099,47 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
     }
   }
 
+  // Compile a degen roast summary based on real debts and skip statistics
+  let roastSummary = "";
+  if (t1Degen.totalDebt > t2Degen.totalDebt && t1Degen.totalDebt > 3000) {
+    roastSummary = `Team 1 is financially drowning (owing ₹${t1Degen.totalDebt}). Maybe focus on paying off your creditors before looking for wins.`;
+  } else if (t2Degen.totalDebt > t1Degen.totalDebt && t2Degen.totalDebt > 3000) {
+    roastSummary = `Team 2 is completely underwater with ₹${t2Degen.totalDebt} in pending debt. Their concentration is compromised by collection threats.`;
+  } else if (t1Degen.shortCount > t2Degen.shortCount && t1Degen.shortCount > 1) {
+    roastSummary = `Team 1 gets an odds multiplier for skipping ${t1Degen.shortCount} group events to grind. True sweatlords.`;
+  } else if (t2Degen.shortCount > t1Degen.shortCount && t2Degen.shortCount > 1) {
+    roastSummary = `Team 2 is boosted by ${t2Degen.shortCount} skips. They sacrificed social life to train.`;
+  } else {
+    roastSummary = "No severe debt or skip discrepancy found. Pure, unadulterated degen skill-off.";
+  }
+
+  const t1Usernames = t1.map(u => u.username);
+  const t2Usernames = t2.map(u => u.username);
+  const loreRoast = await getLoreRoastsForUsers([...t1Usernames, ...t2Usernames]);
+
   return JSON.stringify({
     game: gameName,
     team1: {
       players: t1Names,
       average_win_rate: `${(t1AvgWinRate * 100).toFixed(1)}%`,
       predicted_odds: `${t1Odds.toFixed(1)}%`,
-      live_odds: liveInPlayDetails ? `${liveT1Prob.toFixed(1)}%` : undefined
+      live_odds: liveInPlayDetails ? `${liveT1Prob.toFixed(1)}%` : undefined,
+      financials_and_grinds: t1Degen.details
     },
     team2: {
       players: t2Names,
       average_win_rate: `${(t2AvgWinRate * 100).toFixed(1)}%`,
       predicted_odds: `${t2Odds.toFixed(1)}%`,
-      live_odds: liveInPlayDetails ? `${liveT2Prob.toFixed(1)}%` : undefined
+      live_odds: liveInPlayDetails ? `${liveT2Prob.toFixed(1)}%` : undefined,
+      financials_and_grinds: t2Degen.details
     },
     h2h_history: h2hVerdict,
     live_in_play: liveInPlayDetails,
+    degen_analysis: roastSummary,
+    lore_dossier: loreRoast || undefined,
     verdict: liveInPlayDetails 
-      ? (liveT1Prob > liveT2Prob 
-          ? `LIVE UPDATE: Team 1 (${t1Names}) is currently favored to win with ${liveT1Prob.toFixed(1)}% live odds.` 
-          : liveT2Prob > liveT1Prob 
-            ? `LIVE UPDATE: Team 2 (${t2Names}) is currently favored to win with ${liveT2Prob.toFixed(1)}% live odds.` 
-            : "LIVE UPDATE: Match is split exactly 50/50!")
-      : (t1Odds > t2Odds 
-          ? `Team 1 (${t1Names}) is favored to win with ${t1Odds.toFixed(1)}% odds.` 
-          : t2Odds > t1Odds 
-            ? `Team 2 (${t2Names}) is favored to win with ${t2Odds.toFixed(1)}% odds.` 
-            : "Too close to call (50/50 odds)."
-        )
+      ? `LIVE UPDATE: In-play simulation favors ${liveT1Prob > liveT2Prob ? `Team 1 (${t1Names})` : `Team 2 (${t2Names})`} with ${Math.max(liveT1Prob, liveT2Prob).toFixed(1)}% odds. Degen factor: ${roastSummary} ${loreRoast}`
+      : `Simulation favors ${t1Odds > t2Odds ? `Team 1 (${t1Names})` : `Team 2 (${t2Names})`} with ${Math.max(t1Odds, t2Odds).toFixed(1)}% odds. Degen factor: ${roastSummary} ${loreRoast}`
   });
 }
 
@@ -1127,7 +1214,9 @@ async function ai_create_event(args: any) {
       whatsappBlasted: args.whatsappBlasted,
       microEvents: args.microEvents
     });
-    return JSON.stringify({ success: true, eventId: ev.id, message: "Event created successfully." });
+    const currentMe = await getCurrentDbUser();
+    const lore = currentMe ? await getLoreRoastsForUsers([currentMe.username]) : "";
+    return JSON.stringify({ success: true, eventId: ev.id, message: "Event created successfully. " + lore });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
@@ -1268,7 +1357,8 @@ async function ai_log_cricket_stats(args: any) {
     await logCricketBatter(cricketMatch.id, args.inningNumber, batter.id, args.runsScored, args.ballsFaced || 0, false);
     await logCricketOver(cricketMatch.id, args.inningNumber, bowler.id, args.runsScored, args.wicketsFallen);
 
-    return JSON.stringify({ message: `Logged ${args.runsScored} runs for ${batter.displayName}, and ${args.wicketsFallen} wickets for ${bowler.displayName}.` });
+    const lore = await getLoreRoastsForUsers([batter.username, bowler.username]);
+    return JSON.stringify({ message: `Logged ${args.runsScored} runs for ${batter.displayName}, and ${args.wicketsFallen} wickets for ${bowler.displayName}. ${lore}` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
@@ -1292,7 +1382,12 @@ async function ai_log_cards_round(args: any) {
 
     await logCardsRound(cardsMatch.id, args.roundNumber, participantsData);
 
-    return JSON.stringify({ message: `Logged card round ${args.roundNumber} successfully.` });
+    const playerUsernames = [];
+    for (const p of args.participants) {
+      playerUsernames.push(p.playerName);
+    }
+    const lore = await getLoreRoastsForUsers(playerUsernames);
+    return JSON.stringify({ message: `Logged card round ${args.roundNumber} successfully. ${lore}` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
@@ -1323,7 +1418,9 @@ async function ai_log_badminton_set(args: any) {
 
     await logBadmintonSet(badmintonMatch.id, args.setNumber, team1, args.team1Score, team2, args.team2Score);
 
-    return JSON.stringify({ message: `Logged badminton set ${args.setNumber} successfully.` });
+    const pList = [t1p1?.username, t1p2?.username, t2p1?.username, t2p2?.username].filter(Boolean) as string[];
+    const lore = await getLoreRoastsForUsers(pList);
+    return JSON.stringify({ message: `Logged badminton set ${args.setNumber} successfully. ${lore}` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
@@ -1395,7 +1492,9 @@ async function ai_execute_transaction(args: any) {
     });
 
     const attachMsg = eventId ? ` attached to event.` : ``;
-    return JSON.stringify({ success: true, message: `Transaction logged: ${args.title} for ₹${args.totalAmount}${attachMsg}` });
+    const transactionUsers = [payer.username, ...args.splits.map((s: any) => s.username)];
+    const lore = await getLoreRoastsForUsers(transactionUsers);
+    return JSON.stringify({ success: true, message: `Transaction logged: ${args.title} for ₹${args.totalAmount}${attachMsg} ${lore}` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }

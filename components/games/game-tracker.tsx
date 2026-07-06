@@ -55,11 +55,11 @@ function OngoingMatchCard({ match, members }: any) {
   const [pending, startTransition] = useTransition()
   const [showLogRound, setShowLogRound] = useState(false)
   const [showEndDialog, setShowEndDialog] = useState(false)
-  const [manualWinnerId, setManualWinnerId] = useState<string>('')
+  const [manualWinnerIds, setManualWinnerIds] = useState<string[]>([])
   
   const completeMatch = () => {
     startTransition(async () => {
-      await completeOngoingMatch(match.id, manualWinnerId ? [manualWinnerId] : undefined)
+      await completeOngoingMatch(match.id, manualWinnerIds.length > 0 ? manualWinnerIds : undefined)
       toast('Match completed.', 'success')
       router.refresh()
     })
@@ -91,18 +91,32 @@ function OngoingMatchCard({ match, members }: any) {
       </div>
       
       {match.game.name === 'Cricket' && <CricketScorecard match={match} />}
-
+ 
       {showEndDialog && (
         <div className="mt-4 p-3 border border-secondary/50 rounded bg-background/50">
           <p className="mb-2 text-muted-foreground">Are you sure you want to end this match?</p>
           <div className="mb-3">
-            <label className="block text-accent mb-1">Force Winner (Optional):</label>
-            <select value={manualWinnerId} onChange={e => setManualWinnerId(e.target.value)} className="w-full bg-background border px-2 py-1">
-              <option value="">-- Auto Calculate --</option>
+            <label className="block text-accent mb-1 font-bold">Force Winner(s) (Optional):</label>
+            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto border border-border p-2 bg-background">
               {match.participants?.map((p: any) => (
-                <option key={p.id} value={p.id}>@{p.user?.username}</option>
+                <label key={p.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/10 p-1">
+                  <input
+                    type="checkbox"
+                    checked={manualWinnerIds.includes(p.id)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setManualWinnerIds([...manualWinnerIds, p.id]);
+                      } else {
+                        setManualWinnerIds(manualWinnerIds.filter(id => id !== p.id));
+                      }
+                    }}
+                    className="accent-profit"
+                  />
+                  <span>@{p.user?.username} ({p.teamName || 'Individual'})</span>
+                </label>
               ))}
-            </select>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">If none selected, it will auto-calculate based on match stats.</p>
           </div>
           <div className="flex justify-between mt-3 pt-3 border-t border-border">
             <button onClick={liquidateMatch} disabled={pending} className="text-secondary hover:text-background hover:bg-secondary px-2 py-1 border border-secondary rounded">LIQUIDATE (DELETE)</button>
