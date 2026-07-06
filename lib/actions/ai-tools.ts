@@ -457,6 +457,70 @@ export const aiToolsConfig = [
         required: ['assetName', 'assetType', 'hypeMessage']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'log_cricket_stats',
+      description: 'Log a cricket over, runs, and wickets incrementally for an ongoing match. You MUST state the remaining overs and runs to win if the second inning is happening.',
+      parameters: {
+        type: 'object',
+        properties: {
+          battingPlayer: { type: 'string', description: 'Username or display name of the batter.' },
+          bowlingPlayer: { type: 'string', description: 'Username or display name of the bowler.' },
+          runsScored: { type: 'number', description: 'Runs scored in this over/instance.' },
+          wicketsFallen: { type: 'number', description: 'Wickets taken.' },
+          ballsFaced: { type: 'number', description: 'Number of balls faced by the batter.' },
+          inningNumber: { type: 'number', description: '1 or 2.' }
+        },
+        required: ['battingPlayer', 'bowlingPlayer', 'runsScored', 'wicketsFallen', 'inningNumber']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'log_cards_round',
+      description: 'Log a finished round of cards.',
+      parameters: {
+        type: 'object',
+        properties: {
+          roundNumber: { type: 'number' },
+          participants: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                playerName: { type: 'string', description: 'Username or display name of the player.' },
+                handsMade: { type: 'number', description: 'Number of hands made.' }
+              },
+              required: ['playerName', 'handsMade']
+            }
+          }
+        },
+        required: ['roundNumber', 'participants']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'log_badminton_set',
+      description: 'Log a finished badminton set (supports doubles/singles).',
+      parameters: {
+        type: 'object',
+        properties: {
+          setNumber: { type: 'number' },
+          team1Player1: { type: 'string', description: 'Username or display name of first player on team 1.' },
+          team1Player2: { type: 'string', description: 'Username or display name of second player on team 1 (optional).' },
+          team1Score: { type: 'number' },
+          team2Player1: { type: 'string', description: 'Username or display name of first player on team 2.' },
+          team2Player2: { type: 'string', description: 'Username or display name of second player on team 2 (optional).' },
+          team2Score: { type: 'number' }
+        },
+        required: ['setNumber', 'team1Player1', 'team1Score', 'team2Player1', 'team2Score']
+      }
+    }
   }
 ];
 
