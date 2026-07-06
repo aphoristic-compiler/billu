@@ -945,6 +945,31 @@ async function ai_log_cricket_stats(args: any) {
     if (!batter) return JSON.stringify({ error: `Batter ${args.battingPlayer} not found.` });
     if (!bowler) return JSON.stringify({ error: `Bowler ${args.bowlingPlayer} not found.` });
 
+    // Validate teams if participants are registered
+    const cm = cricketMatch.cricketMatches?.[0];
+    if (cm) {
+      const participants = await db.query.matchParticipants.findMany({
+        where: eq(matchParticipants.matchId, cricketMatch.id)
+      });
+      
+      const batterPart = participants.find(p => p.userId === batter.id);
+      const bowlerPart = participants.find(p => p.userId === bowler.id);
+      
+      const battingFirstTeam = cm.battingFirst || cm.team1Name;
+      const team1Name = cm.team1Name;
+      const team2Name = cm.team2Name;
+      
+      const currentBattingTeam = args.inningNumber === 1 ? battingFirstTeam : (battingFirstTeam === team1Name ? team2Name : team1Name);
+      const currentBowlingTeam = args.inningNumber === 1 ? (battingFirstTeam === team1Name ? team2Name : team1Name) : battingFirstTeam;
+      
+      if (batterPart?.teamName && batterPart.teamName !== currentBattingTeam) {
+        return JSON.stringify({ error: `Batter ${args.battingPlayer} belongs to ${batterPart.teamName}, but ${currentBattingTeam} is batting in Inning ${args.inningNumber}.` });
+      }
+      if (bowlerPart?.teamName && bowlerPart.teamName !== currentBowlingTeam) {
+        return JSON.stringify({ error: `Bowler ${args.bowlingPlayer} belongs to ${bowlerPart.teamName}, but ${currentBowlingTeam} is bowling in Inning ${args.inningNumber}.` });
+      }
+    }
+
     await logCricketBatter(cricketMatch.id, args.inningNumber, batter.id, args.runsScored, args.ballsFaced || 0, false);
     await logCricketOver(cricketMatch.id, args.inningNumber, bowler.id, args.runsScored, args.wicketsFallen);
 

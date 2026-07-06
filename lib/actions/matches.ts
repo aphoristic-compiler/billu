@@ -54,6 +54,8 @@ export async function logMatch(input: {
   maxOvers?: number
   team1Name?: string
   team2Name?: string
+  tossWinner?: string
+  battingFirst?: string
 }) {
   const user = await requireDbUser()
   const [game] = await db.select().from(games).where(eq(games.id, input.gameId))
@@ -69,15 +71,22 @@ export async function logMatch(input: {
     })
     .returning()
 
-  // For poker we create participants right away
-  if (game.name === 'Poker' && input.participants) {
+  // Create participants for all matches if provided
+  if (input.participants && input.participants.length > 0) {
     for (const p of input.participants) {
-      const [mp] = await db.insert(matchParticipants).values({ matchId: match.id, userId: p.userId, isWinner: p.isWinner || false }).returning()
-      if (p.stats) {
+      const [mp] = await db.insert(matchParticipants).values({ 
+        matchId: match.id, 
+        userId: p.userId, 
+        isWinner: p.isWinner || false,
+        teamName: p.teamName 
+      }).returning()
+      if (game.name === 'Poker' && p.stats) {
         await db.insert(pokerLedgers).values({ matchId: match.id, matchParticipantId: mp.id, chipsIn: p.stats.chips_in || 0, chipsOut: p.stats.chips_out || 0 })
       }
     }
-  } else if (game.name === 'Cricket') {
+  }
+
+  if (game.name === 'Cricket') {
     // Initialize cricket match
     await db.insert(cricketMatches).values({
       matchId: match.id,
@@ -85,6 +94,8 @@ export async function logMatch(input: {
       maxOvers: input.maxOvers || 20,
       team1Name: input.team1Name || 'Team 1',
       team2Name: input.team2Name || 'Team 2',
+      tossWinner: input.tossWinner || '',
+      battingFirst: input.battingFirst || '',
     })
   }
 
@@ -127,29 +138,45 @@ export async function completeOngoingMatch(matchId: string, manualWinnerIds?: st
     winnerParticipantIds = manualWinnerIds
   } else if (match.game.name === 'Cricket' && match.cricketMatches[0]) {
     const cm = match.cricketMatches[0]
-    const userScores: Record<string, number> = {}
     let r1 = 0, r2 = 0;
-    let t1 = new Set<string>(), t2 = new Set<string>();
-
     for (const inning of cm.innings) {
-      if (inning.inningNumber === 1) {
-        r1 += inning.totalRuns
-        inning.batterLogs.forEach((b: any) => t1.add(b.matchParticipantId))
-        inning.bowlerLogs.forEach((b: any) => t2.add(b.matchParticipantId))
-      }
-      if (inning.inningNumber === 2) {
-        r2 += inning.totalRuns
-        inning.batterLogs.forEach((b: any) => t2.add(b.matchParticipantId))
-        inning.bowlerLogs.forEach((b: any) => t1.add(b.matchParticipantId))
-      }
+      if (inning.inningNumber === 1) r1 += inning.totalRuns
+      if (inning.inningNumber === 2) r2 += inning.totalRuns
     }
 
-    if (r1 > r2) winnerParticipantIds = Array.from(t1)
-    else if (r2 > r1) winnerParticipantIds = Array.from(t2)
+    let battingFirstTeamName = cm.battingFirst || cm.team1Name;
+    if (cm.innings && cm.innings.length > 0) {
+      const inning1 = cm.innings.find((inng: any) => inng.inningNumber === 1);
+      if (inning1) {
+        battingFirstTeamName = inning1.battingTeam;
+      }
+    }
+    const battingSecondTeamName = battingFirstTeamName === cm.team1Name ? cm.team2Name : cm.team1Name;
+
+    let winningTeamName = '';
+    if (r1 > r2) {
+      winningTeamName = battingFirstTeamName;
+    } else if (r2 > r1) {
+      winningTeamName = battingSecondTeamName;
+    }
+
+    if (winningTeamName) {
+      winnerParticipantIds = match.participants
+        .filter((p: any) => p.teamName === winningTeamName)
+        .map((p: any) => p.id);
+    }
   } else if (match.game.name === 'Badminton') {
     const userScores: Record<string, number> = {}
     match.badmintonSets.forEach((set: any) => {
-      if (set.winnerId) userScores[set.winnerId] = (userScores[set.winnerId] || 0) + 1
+      const team1Won = set.score1 > set.score2
+      const team2Won = set.score2 > set.score1
+      if (team1Won) {
+        userScores[set.player1Id] = (userScores[set.player1Id] || 0) + 1
+        if (set.team1Player2Id) userScores[set.team1Player2Id] = (userScores[set.team1Player2Id] || 0) + 1
+      } else if (team2Won) {
+        userScores[set.player2Id] = (userScores[set.player2Id] || 0) + 1
+        if (set.team2Player2Id) userScores[set.team2Player2Id] = (userScores[set.team2Player2Id] || 0) + 1
+      }
     })
     if (Object.keys(userScores).length > 0) {
       const max = Math.max(...Object.values(userScores))

@@ -165,6 +165,17 @@ function LogRoundForm({ match, members, onClose }: any) {
   // Poker
   const [pokerPlayer, setPokerPlayer] = useState({ userId: '', chipsIn: '', chipsOut: '' })
 
+  const cm = match.cricketMatches?.[0]
+  const battingFirstTeam = cm?.battingFirst
+  const team1Name = cm?.team1Name
+  const team2Name = cm?.team2Name
+
+  const currentBattingTeam = inningNumber === 1 ? battingFirstTeam : (battingFirstTeam === team1Name ? team2Name : team1Name);
+  const currentBowlingTeam = inningNumber === 1 ? (battingFirstTeam === team1Name ? team2Name : team1Name) : battingFirstTeam;
+
+  const battingPlayers = match.participants?.filter((p: any) => p.teamName === currentBattingTeam) || []
+  const bowlingPlayers = match.participants?.filter((p: any) => p.teamName === currentBowlingTeam) || []
+
   const submitOver = () => {
     startTransition(async () => {
       if (!cricketOver.bowler) return toast('Select bowler', 'error')
@@ -234,7 +245,15 @@ function LogRoundForm({ match, members, onClose }: any) {
             <div className="grid grid-cols-2 gap-2">
               <select value={cricketOver.bowler} onChange={e => setCricketOver(p => ({...p, bowler: e.target.value}))} className="bg-background border px-1">
                 <option value="">-- Bowler --</option>
-                {members.map((m: any) => <option key={m.id} value={m.id}>@{m.username}</option>)}
+                {bowlingPlayers.length > 0 ? (
+                  bowlingPlayers.map((p: any) => (
+                    <option key={p.userId} value={p.userId}>@{p.user?.username}</option>
+                  ))
+                ) : (
+                  members.map((m: any) => (
+                    <option key={m.id} value={m.id}>@{m.username}</option>
+                  ))
+                )}
               </select>
               <input type="number" placeholder="Runs Conceded" value={cricketOver.runs} onChange={e => setCricketOver(p => ({...p, runs: e.target.value}))} className="bg-background border px-1" />
               <input type="number" placeholder="Wickets Taken" value={cricketOver.wickets} onChange={e => setCricketOver(p => ({...p, wickets: e.target.value}))} className="bg-background border px-1" />
@@ -247,7 +266,15 @@ function LogRoundForm({ match, members, onClose }: any) {
             <div className="grid grid-cols-2 gap-2">
               <select value={cricketBatter.batter} onChange={e => setCricketBatter(p => ({...p, batter: e.target.value}))} className="bg-background border px-1">
                 <option value="">-- Batter --</option>
-                {members.map((m: any) => <option key={m.id} value={m.id}>@{m.username}</option>)}
+                {battingPlayers.length > 0 ? (
+                  battingPlayers.map((p: any) => (
+                    <option key={p.userId} value={p.userId}>@{p.user?.username}</option>
+                  ))
+                ) : (
+                  members.map((m: any) => (
+                    <option key={m.id} value={m.id}>@{m.username}</option>
+                  ))
+                )}
               </select>
               <input type="number" placeholder="Runs Scored" value={cricketBatter.runs} onChange={e => setCricketBatter(p => ({...p, runs: e.target.value}))} className="bg-background border px-1" />
               <input type="number" placeholder="Balls Faced" value={cricketBatter.balls} onChange={e => setCricketBatter(p => ({...p, balls: e.target.value}))} className="bg-background border px-1" />
@@ -377,6 +404,9 @@ function RecordMatchForm({ games, members, onClose }: any) {
   const [cricketForm, setCricketForm] = useState({ format: 'T20', maxOvers: '20', team1: 'Team A', team2: 'Team B' })
   const [team1Members, setTeam1Members] = useState<string[]>([])
   const [team2Members, setTeam2Members] = useState<string[]>([])
+  const [tossWinner, setTossWinner] = useState('')
+  const [tossDecision, setTossDecision] = useState('Bat')
+  const [battingFirst, setBattingFirst] = useState('')
 
   const startMatch = () => {
     startTransition(async () => {
@@ -395,12 +425,26 @@ function RecordMatchForm({ games, members, onClose }: any) {
         format: cricketForm.format,
         maxOvers: Number(cricketForm.maxOvers),
         team1Name: cricketForm.team1,
-        team2Name: cricketForm.team2
+        team2Name: cricketForm.team2,
+        tossWinner,
+        battingFirst
       })
       toast('Match started.', 'success')
       onClose()
       router.refresh()
     })
+  }
+
+  const simulateToss = () => {
+    const winner = Math.random() < 0.5 ? cricketForm.team1 : cricketForm.team2;
+    const decision = Math.random() < 0.5 ? 'Bat' : 'Bowl';
+    setTossWinner(winner);
+    setTossDecision(decision);
+    if (winner === cricketForm.team1) {
+      setBattingFirst(decision === 'Bat' ? cricketForm.team1 : cricketForm.team2);
+    } else {
+      setBattingFirst(decision === 'Bat' ? cricketForm.team2 : cricketForm.team1);
+    }
   }
 
   return (
@@ -453,6 +497,54 @@ function RecordMatchForm({ games, members, onClose }: any) {
               ))}
               <button onClick={() => setTeam2Members([...team2Members, members[0]?.id])} className="w-full text-left text-profit mt-1 text-[10px]">+ Add Player</button>
             </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2 mt-4 border-t border-border/50 pt-2">
+            <div>
+              <label className="block text-accent mb-1 font-bold">Toss Winner</label>
+              <select value={tossWinner} onChange={e => {
+                setTossWinner(e.target.value);
+                if (e.target.value === cricketForm.team1) {
+                  setBattingFirst(tossDecision === 'Bat' ? cricketForm.team1 : cricketForm.team2);
+                } else if (e.target.value === cricketForm.team2) {
+                  setBattingFirst(tossDecision === 'Bat' ? cricketForm.team2 : cricketForm.team1);
+                }
+              }} className="w-full bg-background border px-1 py-1">
+                <option value="">-- Select --</option>
+                <option value={cricketForm.team1}>{cricketForm.team1}</option>
+                <option value={cricketForm.team2}>{cricketForm.team2}</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-accent mb-1 font-bold">Toss Decision</label>
+              <select value={tossDecision} onChange={e => {
+                setTossDecision(e.target.value);
+                if (tossWinner === cricketForm.team1) {
+                  setBattingFirst(e.target.value === 'Bat' ? cricketForm.team1 : cricketForm.team2);
+                } else if (tossWinner === cricketForm.team2) {
+                  setBattingFirst(e.target.value === 'Bat' ? cricketForm.team2 : cricketForm.team1);
+                }
+              }} className="w-full bg-background border px-1 py-1">
+                <option value="Bat">Bat</option>
+                <option value="Bowl">Bowl</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="flex gap-2 mt-2 items-center">
+            <button type="button" onClick={simulateToss} className="bg-secondary text-background text-[10px] px-2 py-1 rounded">SIMULATE TOSS</button>
+            <div className="text-[10px] text-muted-foreground">
+              {tossWinner ? `${tossWinner} won the toss & elected to ${tossDecision === 'Bat' ? 'bat' : 'field'}` : 'No toss simulated'}
+            </div>
+          </div>
+          
+          <div className="mt-3">
+            <label className="block text-accent mb-1 font-bold">Batting First Team</label>
+            <select value={battingFirst} onChange={e => setBattingFirst(e.target.value)} className="w-full bg-background border px-1 py-1">
+              <option value="">-- Select --</option>
+              <option value={cricketForm.team1}>{cricketForm.team1}</option>
+              <option value={cricketForm.team2}>{cricketForm.team2}</option>
+            </select>
           </div>
         </div>
       )}
