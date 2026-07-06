@@ -93,10 +93,18 @@ export async function logMatch(input: {
   return match
 }
 
-export async function completeOngoingMatch(matchId: string) {
+export async function deleteMatch(matchId: string) {
+  const user = await requireDbUser()
+  await db.delete(matches).where(eq(matches.id, matchId))
+  await logActivity(user.id, 'match_deleted', `[LIQUIDATE] Match was deleted.`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/games')
+}
+
+export async function completeOngoingMatch(matchId: string, manualWinnerIds?: string[]) {
   const user = await requireDbUser()
   
-  const [match] = await db.query.matches.findFirst({
+  const match = await db.query.matches.findFirst({
     where: eq(matches.id, matchId),
     with: { 
       game: true, 
@@ -114,7 +122,9 @@ export async function completeOngoingMatch(matchId: string) {
   
   let winnerParticipantIds: string[] = []
 
-  if (match.game.name === 'Cricket' && match.cricketMatches[0]) {
+  if (manualWinnerIds && manualWinnerIds.length > 0) {
+    winnerParticipantIds = manualWinnerIds
+  } else if (match.game.name === 'Cricket' && match.cricketMatches[0]) {
     const cm = match.cricketMatches[0]
     const userScores: Record<string, number> = {}
     let r1 = 0, r2 = 0;
