@@ -93,13 +93,13 @@ export const aiToolsConfig = [
     type: 'function',
     function: {
       name: 'simulate_match_odds',
-      description: 'Calculates the historical mathematical odds of winning between two players in a specific game.',
+      description: 'Calculates predicted odds of winning between two players OR two teams in a specific game. Performs head-to-head and overall stat simulations.',
       parameters: {
         type: 'object',
         properties: {
-          player1: { type: 'string' },
-          player2: { type: 'string' },
-          gameName: { type: 'string', description: 'Name of the game (e.g. FIFA, Poker)' }
+          player1: { type: 'string', description: 'Single username/display name or a comma-separated list of usernames for Team 1.' },
+          player2: { type: 'string', description: 'Single username/display name or a comma-separated list of usernames for Team 2.' },
+          gameName: { type: 'string', description: 'Name of the game (e.g. FIFA, Poker, Cricket, Badminton)' }
         },
         required: ['player1', 'player2', 'gameName']
       }
@@ -714,50 +714,153 @@ async function calculate_systemic_risk() {
 }
 
 async function simulate_match_odds(player1: string, player2: string, gameName: string) {
-  const p1 = await db.query.users.findFirst({ where: or(eq(users.username, player1.replace('@', '')), ilike(users.displayName, `%${player1.replace('@', '')}%`)) });
-  const p2 = await db.query.users.findFirst({ where: or(eq(users.username, player2.replace('@', '')), ilike(users.displayName, `%${player2.replace('@', '')}%`)) });
-  
-  if (!p1 || !p2) return JSON.stringify({ error: "One or both players not found." });
+  // 1. Resolve players for Team 1 and Team 2
+  const resolveTeam = async (inputStr: string) => {
+    const names = inputStr.split(',').map(n => n.trim().replace('@', '')).filter(Boolean);
+    const usersList: any[] = [];
+    for (const name of names) {
+      const u = await db.query.users.findFirst({
+        where: or(eq(users.username, name), ilike(users.displayName, `%${name}%`))
+      });
+      if (u) usersList.push(u);
+    }
+    return usersList;
+  };
 
-  // fetch stats
+  const t1 = await resolveTeam(player1);
+  const t2 = await resolveTeam(player2);
+
+  if (t1.length === 0 || t2.length === 0) {
+    return JSON.stringify({ error: "One or both teams contain no valid users." });
+  }
+
+  const t1Ids = t1.map(u => u.id);
+  const t2Ids = t2.map(u => u.id);
+
+  // 2. Fetch all match participations with games
   const allParticipations = await db.query.matchParticipants.findMany({
-    with: { match: { with: { game: true } } }
+    with: { match: { with: { game: true } }, user: true }
   });
 
-  let p1Wins = 0, p1Total = 0;
-  let p2Wins = 0, p2Total = 0;
+  // 3. Calculate overall individual win rates for Team 1 and Team 2 in this game, 
+  // falling back to across all games if they have never played this game.
+  const getPlayerStats = (userId: string) => {
+    let winsGame = 0, totalGame = 0;
+    let winsOverall = 0, totalOverall = 0;
 
+    allParticipations.forEach((p: any) => {
+      if (p.userId === userId) {
+        totalOverall++;
+        if (p.isWinner) winsOverall++;
+
+        if (p.match?.game?.name?.toLowerCase() === gameName.toLowerCase()) {
+          totalGame++;
+          if (p.isWinner) winsGame++;
+        }
+      }
+    });
+
+    const rate = totalGame > 0 ? winsGame / totalGame : (totalOverall > 0 ? winsOverall / totalOverall : 0.5); // default to 50% if brand new
+    return { rate, totalGame, totalOverall };
+  };
+
+  const t1Stats = t1.map(u => getPlayerStats(u.id));
+  const t2Stats = t2.map(u => getPlayerStats(u.id));
+
+  const t1AvgWinRate = t1Stats.reduce((sum, s) => sum + s.rate, 0) / t1Stats.length;
+  const t2AvgWinRate = t2Stats.reduce((sum, s) => sum + s.rate, 0) / t2Stats.length;
+
+  // 4. Calculate direct Head-to-Head (H2H) records between Team 1 and Team 2 in this game.
+  // Group participations by matchId
+  const matchGroups: Record<string, { t1Winners: number, t1Losers: number, t2Winners: number, t2Losers: number }> = {};
+  
   allParticipations.forEach((p: any) => {
     if (p.match?.game?.name?.toLowerCase() === gameName.toLowerCase()) {
-      if (p.userId === p1.id) {
-        p1Total++;
-        if (p.isWinner) p1Wins++;
+      const matchId = p.matchId;
+      if (!matchGroups[matchId]) {
+        matchGroups[matchId] = { t1Winners: 0, t1Losers: 0, t2Winners: 0, t2Losers: 0 };
       }
-      if (p.userId === p2.id) {
-        p2Total++;
-        if (p.isWinner) p2Wins++;
+      
+      const isT1 = t1Ids.includes(p.userId);
+      const isT2 = t2Ids.includes(p.userId);
+      
+      if (isT1) {
+        if (p.isWinner) matchGroups[matchId].t1Winners++;
+        else matchGroups[matchId].t1Losers++;
+      } else if (isT2) {
+        if (p.isWinner) matchGroups[matchId].t2Winners++;
+        else matchGroups[matchId].t2Losers++;
       }
     }
   });
 
-  const p1Rate = p1Total > 0 ? p1Wins / p1Total : 0;
-  const p2Rate = p2Total > 0 ? p2Wins / p2Total : 0;
-  
-  if (p1Total === 0 && p2Total === 0) return JSON.stringify({ message: `No historical data for ${gameName} between these players.` });
+  let t1H2HWins = 0;
+  let t2H2HWins = 0;
+  let h2hTotal = 0;
 
-  const totalRate = p1Rate + p2Rate;
-  let p1Odds = 50, p2Odds = 50;
-  
-  if (totalRate > 0) {
-    p1Odds = (p1Rate / totalRate) * 100;
-    p2Odds = (p2Rate / totalRate) * 100;
+  for (const mg of Object.values(matchGroups)) {
+    // Only count if there was at least one player from T1 and at least one from T2 playing against each other
+    const hasT1 = mg.t1Winners > 0 || mg.t1Losers > 0;
+    const hasT2 = mg.t2Winners > 0 || mg.t2Losers > 0;
+    
+    if (hasT1 && hasT2) {
+      h2hTotal++;
+      // Determine match outcome: if T1 players won, T1 wins. If T2 players won, T2 wins.
+      if (mg.t1Winners > 0 && mg.t2Winners === 0) {
+        t1H2HWins++;
+      } else if (mg.t2Winners > 0 && mg.t1Winners === 0) {
+        t2H2HWins++;
+      }
+    }
   }
+
+  // 5. Predict match odds based on win rates and H2H weights
+  let t1OddsScore = t1AvgWinRate;
+  let t2OddsScore = t2AvgWinRate;
+
+  let h2hVerdict = "No historical head-to-head records found between these teams in " + gameName + ".";
+
+  if (h2hTotal > 0) {
+    const h2hWeight = Math.min(h2hTotal * 0.15, 0.6); // Up to 60% weight on head-to-head history
+    const t1H2HRate = t1H2HWins / h2hTotal;
+    const t2H2HRate = t2H2HWins / h2hTotal;
+    
+    t1OddsScore = (t1AvgWinRate * (1 - h2hWeight)) + (t1H2HRate * h2hWeight);
+    t2OddsScore = (t2AvgWinRate * (1 - h2hWeight)) + (t2H2HRate * h2hWeight);
+
+    h2hVerdict = `Head-to-head record in ${gameName}: Team 1 won ${t1H2HWins} times, Team 2 won ${t2H2HWins} times.`;
+  }
+
+  // Scale to percentages
+  const sumOdds = t1OddsScore + t2OddsScore;
+  let t1Odds = 50, t2Odds = 50;
+  if (sumOdds > 0) {
+    t1Odds = (t1OddsScore / sumOdds) * 100;
+    t2Odds = (t2OddsScore / sumOdds) * 100;
+  }
+
+  // Format outputs
+  const t1Names = t1.map(u => `@${u.username}`).join(', ');
+  const t2Names = t2.map(u => `@${u.username}`).join(', ');
 
   return JSON.stringify({
     game: gameName,
-    player1: { name: player1, win_rate: `${(p1Rate*100).toFixed(1)}%`, predicted_odds: `${p1Odds.toFixed(1)}%` },
-    player2: { name: player2, win_rate: `${(p2Rate*100).toFixed(1)}%`, predicted_odds: `${p2Odds.toFixed(1)}%` },
-    verdict: p1Odds > p2Odds ? `@${player1} is favored.` : p2Odds > p1Odds ? `@${player2} is favored.` : "Too close to call (50/50)."
+    team1: {
+      players: t1Names,
+      average_win_rate: `${(t1AvgWinRate * 100).toFixed(1)}%`,
+      predicted_odds: `${t1Odds.toFixed(1)}%`
+    },
+    team2: {
+      players: t2Names,
+      average_win_rate: `${(t2AvgWinRate * 100).toFixed(1)}%`,
+      predicted_odds: `${t2Odds.toFixed(1)}%`
+    },
+    h2h_history: h2hVerdict,
+    verdict: t1Odds > t2Odds 
+      ? `Team 1 (${t1Names}) is favored to win with ${t1Odds.toFixed(1)}% odds.` 
+      : t2Odds > t1Odds 
+        ? `Team 2 (${t2Names}) is favored to win with ${t2Odds.toFixed(1)}% odds.` 
+        : "Too close to call (50/50 odds)."
   });
 }
 
