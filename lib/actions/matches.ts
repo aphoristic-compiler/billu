@@ -173,10 +173,16 @@ export async function completeOngoingMatch(matchId: string, winners: string[] = 
       }))
     } else if (game.name === 'Cricket') {
       let r1 = 0, r2 = 0;
-      let t1: string[] = [], t2: string[] = [];
+      let t1 = new Set<string>(), t2 = new Set<string>();
       rounds.forEach(r => r.stats.forEach(s => {
-        if (r.roundNumber === 1 && s.role === 'batting') { r1 += Number(s.stats.runs) || 0; t1.push(s.matchParticipantId) }
-        if (r.roundNumber === 2 && s.role === 'batting') { r2 += Number(s.stats.runs) || 0; t2.push(s.matchParticipantId) }
+        if (r.roundNumber === 1) {
+          if (s.role === 'batting') { r1 += Number(s.stats.runs) || 0; t1.add(s.matchParticipantId); }
+          if (s.role === 'bowling') { t2.add(s.matchParticipantId); }
+        }
+        if (r.roundNumber === 2) {
+          if (s.role === 'batting') { r2 += Number(s.stats.runs) || 0; t2.add(s.matchParticipantId); }
+          if (s.role === 'bowling') { t1.add(s.matchParticipantId); }
+        }
       }))
       if (r1 > r2) t1.forEach(id => userScores[id] = 1)
       else if (r2 > r1) t2.forEach(id => userScores[id] = 1)

@@ -25,6 +25,7 @@ interface MatchRoundStat {
   stats: any
   isWinner: boolean
   participant: { userId: string }
+  matchParticipantId: string
 }
 interface MatchRound {
   id: string
@@ -50,6 +51,90 @@ interface Match {
   game: Game
   participants: Participant[]
   rounds?: MatchRound[]
+}
+
+// ─── Format Round Summaries ───
+function formatRounds(match: Match, members: Member[], isOngoing: boolean) {
+  if (!match.rounds || match.rounds.length === 0) return null
+
+  if (match.game?.name === 'Cricket') {
+    let r1 = { runs: 0, wickets: 0, overs: 0, batters: [] as string[], bowlers: [] as string[] }
+    let r2 = { runs: 0, wickets: 0, overs: 0, batters: [] as string[], bowlers: [] as string[] }
+    
+    for (const r of match.rounds) {
+      const summary = r.roundNumber === 1 ? r1 : r2
+      for (const s of r.stats) {
+        const u = members.find(m => m.id === s.participant.userId || m.id === match.participants.find(p => p.id === s.matchParticipantId)?.userId)
+        const name = u?.username || '?'
+        if (s.role === 'batting') {
+          summary.runs += Number(s.stats.runs) || 0
+          if (!summary.batters.includes(name)) summary.batters.push(name)
+        }
+        if (s.role === 'bowling') {
+          summary.wickets += Number(s.stats.wickets) || 0
+          summary.overs += Number(s.stats.overs) || 0
+          if (!summary.bowlers.includes(name)) summary.bowlers.push(name)
+        }
+      }
+    }
+
+    return (
+      <div className="flex flex-col gap-1 text-muted-foreground mt-2">
+        {r1.batters.length > 0 && (
+          <p>
+            <span className="text-foreground font-bold">1st Inning:</span> {r1.runs}/{r1.wickets} ({r1.overs} overs) 
+            <span className="text-[10px] ml-2">Bat: {r1.batters.join(', ')} | Bowl: {r1.bowlers.join(', ')}</span>
+          </p>
+        )}
+        {r2.batters.length > 0 && (
+          <p>
+            <span className="text-foreground font-bold">2nd Inning:</span> {r2.runs}/{r2.wickets} ({r2.overs} overs) 
+            <span className="text-[10px] ml-2">Bat: {r2.batters.join(', ')} | Bowl: {r2.bowlers.join(', ')}</span>
+          </p>
+        )}
+        {isOngoing && r1.batters.length > 0 && r2.batters.length > 0 && (
+          <p className="text-accent font-bold mt-1">Target: {r1.runs + 1} | Need {r1.runs + 1 - r2.runs} runs in {(match.maxOvers || 20) - r2.overs} overs</p>
+        )}
+      </div>
+    )
+  }
+
+  if (match.game?.name === 'Badminton') {
+    return (
+      <div className="flex flex-col gap-1 text-muted-foreground mt-2">
+        {match.rounds.map(r => {
+          const s1 = r.stats[0]
+          const s2 = r.stats[1]
+          if (!s1 || !s2) return null
+          const u1 = members.find(m => m.id === s1.participant.userId || m.id === match.participants.find(p => p.id === s1.matchParticipantId)?.userId)?.username
+          const u2 = members.find(m => m.id === s2.participant.userId || m.id === match.participants.find(p => p.id === s2.matchParticipantId)?.userId)?.username
+          return (
+            <p key={r.id}>
+              <span className="text-foreground font-bold">Set {r.roundNumber}:</span> {u1} {s1.stats.score} - {s2.stats.score} {u2}
+            </p>
+          )
+        })}
+      </div>
+    )
+  }
+
+  if (match.game?.name === 'Cards') {
+    return (
+      <div className="flex flex-col gap-1 text-muted-foreground mt-2">
+        {match.rounds.map(r => (
+          <p key={r.id}>
+            <span className="text-foreground font-bold">Round {r.roundNumber}:</span>{' '}
+            {r.stats.map(s => {
+              const u = members.find(m => m.id === s.participant.userId || m.id === match.participants.find(p => p.id === s.matchParticipantId)?.userId)?.username
+              return `${u} (${s.stats.hands_made})`
+            }).join(', ')}
+          </p>
+        ))}
+      </div>
+    )
+  }
+
+  return null
 }
 
 export function GameTracker({
@@ -96,7 +181,7 @@ export function GameTracker({
         ) : (
           <ul className="mt-3 flex flex-col gap-4">
             {completedMatches.map(m => (
-              <CompletedMatchCard key={m.id} match={m} currentUserId={currentUserId} />
+              <CompletedMatchCard key={m.id} match={m} currentUserId={currentUserId} members={members} />
             ))}
           </ul>
         )}
@@ -108,6 +193,7 @@ export function GameTracker({
 function OngoingMatchCard({ match, members }: { match: Match; members: Member[] }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [showLogRound, setShowLogRound] = useState(false)
   
   const completeMatch = () => {
     startTransition(async () => {
@@ -124,35 +210,142 @@ function OngoingMatchCard({ match, members }: { match: Match; members: Member[] 
           <span className="animate-pulse h-2 w-2 rounded-full bg-profit"></span>
           {match.game.icon} {match.game.name}
         </span>
-        <button onClick={completeMatch} className="text-muted-foreground hover:text-profit">
-          END_MATCH
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowLogRound(!showLogRound)} className="text-muted-foreground hover:text-foreground border border-border px-2 rounded">
+            {showLogRound ? 'CANCEL' : 'LOG ROUND'}
+          </button>
+          <button onClick={completeMatch} className="text-muted-foreground hover:text-profit border border-border px-2 rounded bg-background">
+            END_MATCH
+          </button>
+        </div>
       </div>
-      <p className="mt-1 text-muted-foreground">Log stats incrementally using the AI terminal!</p>
       
-      {match.rounds && match.rounds.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2">
-          {match.rounds.map(r => (
-            <div key={r.id} className="border-t border-border/50 pt-2">
-              <p className="font-bold">{r.type.toUpperCase()} {r.roundNumber}</p>
-              {r.stats.map(s => {
-                const user = members.find(m => m.id === s.participant.userId)
-                return (
-                  <div key={s.id} className="flex justify-between pl-2 mt-1">
-                    <span>@{user?.username} {s.role ? `(${s.role})` : ''}</span>
-                    <span className="text-muted-foreground">{JSON.stringify(s.stats)}</span>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
+      {formatRounds(match, members, true)}
+
+      {showLogRound && (
+        <div className="mt-4 pt-4 border-t border-border/50">
+          <LogRoundForm match={match} members={members} onClose={() => setShowLogRound(false)} />
         </div>
       )}
     </div>
   )
 }
 
-function CompletedMatchCard({ match, currentUserId }: { match: Match; currentUserId: string }) {
+function LogRoundForm({ match, members, onClose }: { match: Match, members: Member[], onClose: () => void }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [roundNumber, setRoundNumber] = useState(1)
+
+  // Cricket
+  const [cricketStats, setCricketStats] = useState({ batter: '', bowler: '', runs: '', wickets: '', overs: '' })
+  
+  // Badminton
+  const [badStats, setBadStats] = useState({ p1: '', s1: '', p2: '', s2: '' })
+
+  // Cards
+  const [cardStats, setCardStats] = useState<Record<string, string>>({})
+
+  const submit = () => {
+    startTransition(async () => {
+      let participants: any[] = []
+      
+      if (match.game.name === 'Cricket') {
+        if (!cricketStats.batter || !cricketStats.bowler) return toast('Select batter and bowler', 'error')
+        participants = [
+          { userId: cricketStats.batter, role: 'batting', stats: { runs: Number(cricketStats.runs) } },
+          { userId: cricketStats.bowler, role: 'bowling', stats: { overs: Number(cricketStats.overs), wickets: Number(cricketStats.wickets), runs_given: Number(cricketStats.runs) } }
+        ]
+      } else if (match.game.name === 'Badminton') {
+        if (!badStats.p1 || !badStats.p2) return toast('Select players', 'error')
+        participants = [
+          { userId: badStats.p1, isWinner: Number(badStats.s1) > Number(badStats.s2), stats: { score: Number(badStats.s1) } },
+          { userId: badStats.p2, isWinner: Number(badStats.s2) > Number(badStats.s1), stats: { score: Number(badStats.s2) } }
+        ]
+      } else if (match.game.name === 'Cards') {
+        participants = Object.entries(cardStats).filter(([_, v]) => v !== '').map(([userId, v]) => ({
+          userId,
+          stats: { hands_made: Number(v) }
+        }))
+        if (participants.length === 0) return toast('Enter stats', 'error')
+      }
+
+      await addMatchRound({
+        matchId: match.id,
+        roundNumber,
+        type: match.game.name === 'Cricket' ? 'inning' : match.game.name === 'Badminton' ? 'set' : 'round',
+        participants
+      })
+
+      toast('Round logged.', 'success')
+      onClose()
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h4 className="font-bold text-accent">Log {match.game.name === 'Cricket' ? 'Inning' : match.game.name === 'Badminton' ? 'Set' : 'Round'} Data</h4>
+      
+      <label className="flex gap-2 items-center">
+        <span>Number:</span>
+        <input type="number" value={roundNumber} onChange={e => setRoundNumber(Number(e.target.value))} className="w-16 bg-background border px-1" />
+      </label>
+
+      {match.game.name === 'Cricket' && (
+        <div className="grid grid-cols-2 gap-2">
+          <select value={cricketStats.batter} onChange={e => setCricketStats(p => ({...p, batter: e.target.value}))} className="bg-background border px-1">
+            <option value="">-- Batter --</option>
+            {members.map(m => <option key={m.id} value={m.id}>@{m.username}</option>)}
+          </select>
+          <select value={cricketStats.bowler} onChange={e => setCricketStats(p => ({...p, bowler: e.target.value}))} className="bg-background border px-1">
+            <option value="">-- Bowler --</option>
+            {members.map(m => <option key={m.id} value={m.id}>@{m.username}</option>)}
+          </select>
+          <input type="number" placeholder="Runs" value={cricketStats.runs} onChange={e => setCricketStats(p => ({...p, runs: e.target.value}))} className="bg-background border px-1" />
+          <input type="number" placeholder="Wickets" value={cricketStats.wickets} onChange={e => setCricketStats(p => ({...p, wickets: e.target.value}))} className="bg-background border px-1" />
+          <input type="number" placeholder="Overs (e.g. 1, 0.5)" value={cricketStats.overs} onChange={e => setCricketStats(p => ({...p, overs: e.target.value}))} className="bg-background border px-1" />
+        </div>
+      )}
+
+      {match.game.name === 'Badminton' && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <select value={badStats.p1} onChange={e => setBadStats(p => ({...p, p1: e.target.value}))} className="bg-background border px-1">
+              <option value="">-- P1/Team 1 --</option>
+              {members.map(m => <option key={m.id} value={m.id}>@{m.username}</option>)}
+            </select>
+            <input type="number" placeholder="Score" value={badStats.s1} onChange={e => setBadStats(p => ({...p, s1: e.target.value}))} className="bg-background border px-1" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <select value={badStats.p2} onChange={e => setBadStats(p => ({...p, p2: e.target.value}))} className="bg-background border px-1">
+              <option value="">-- P2/Team 2 --</option>
+              {members.map(m => <option key={m.id} value={m.id}>@{m.username}</option>)}
+            </select>
+            <input type="number" placeholder="Score" value={badStats.s2} onChange={e => setBadStats(p => ({...p, s2: e.target.value}))} className="bg-background border px-1" />
+          </div>
+        </div>
+      )}
+
+      {match.game.name === 'Cards' && (
+        <div className="flex flex-col gap-1 max-h-32 overflow-y-auto pr-2">
+          {members.map(m => (
+            <div key={m.id} className="flex justify-between items-center">
+              <span>@{m.username}</span>
+              <input type="number" placeholder="Hands" value={cardStats[m.id] || ''} onChange={e => setCardStats(p => ({...p, [m.id]: e.target.value}))} className="w-16 bg-background border px-1" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 mt-2">
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded">CANCEL</button>
+        <CandlestickButton onClick={submit} isLoading={pending}>SAVE LOG</CandlestickButton>
+      </div>
+    </div>
+  )
+}
+
+function CompletedMatchCard({ match, currentUserId, members }: { match: Match; currentUserId: string; members: Member[] }) {
   const winners = match.participants.filter((p) => p.isWinner)
   const losers = match.participants.filter((p) => !p.isWinner)
   
@@ -184,17 +377,7 @@ function CompletedMatchCard({ match, currentUserId }: { match: Match; currentUse
       ) : match.rounds && match.rounds.length > 0 ? (
         <div className="flex flex-col gap-2">
           <p className="font-bold text-accent">Overall: {winners.length > 0 ? `W[${winners.map(w => w.user.username).join(', ')}]` : 'Draw'}</p>
-          {match.rounds.map(r => (
-            <div key={r.id} className="bg-background rounded p-2">
-              <p className="text-muted-foreground mb-1 text-[10px]">{r.type.toUpperCase()} {r.roundNumber}</p>
-              {r.stats.map(s => (
-                <div key={s.id} className="flex justify-between">
-                  <span>@{match.participants.find(p => p.id === s.participant?.userId || p.userId === s.participant?.userId)?.user?.username || '?'} {s.role ? `(${s.role})` : ''}</span>
-                  <span>{JSON.stringify(s.stats)}</span>
-                </div>
-              ))}
-            </div>
-          ))}
+          {formatRounds(match, members, false)}
         </div>
       ) : (
         <p className="mt-0.5">
@@ -299,7 +482,7 @@ function RecordMatchForm({ games, members, onClose }: { games: Game[], members: 
         </div>
       ) : (
         <div className="mt-4 font-mono text-xs text-muted-foreground">
-          Start an ongoing {game?.name} match. You can incrementally log rounds via the terminal.
+          Start an ongoing {game?.name} match. You can incrementally log rounds via the terminal or UI.
         </div>
       )}
 
