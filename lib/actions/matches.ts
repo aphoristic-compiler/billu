@@ -1,256 +1,29 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { desc, eq, inArray } from 'drizzle-orm'
-import { db, games, matches, matchParticipants, users, matchRounds, matchRoundStats } from '@/lib/db'
+import { desc, eq, inArray, and } from 'drizzle-orm'
+import { db, games, matches, matchParticipants, users, cricketMatches, cricketInnings, cricketBatterLogs, cricketBowlerLogs, badmintonSets, cardRounds, cardPlayerHands, pokerLedgers } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 
-export async function logMatch(input: {
-  gameId: string
-  notes?: string
-  eventId?: string
-  status?: string
-  maxOvers?: number
-  participants: {
-    userId: string
-    teamName?: string
-    stats: Record<string, number | string>
-    isWinner: boolean
-  }[]
-}) {
-  const user = await requireDbUser()
-
-  const [match] = await db
-    .insert(matches)
-    .values({
-      gameId: input.gameId,
-      eventId: input.eventId || null,
-      createdBy: user.id,
-      notes: input.notes || null,
-      status: input.status || 'completed',
-      maxOvers: input.maxOvers || null,
-    })
-    .returning()
-
-  if (input.participants.length > 0) {
-    await db.insert(matchParticipants).values(
-      input.participants.map((p) => ({
-        matchId: match.id,
-        userId: p.userId,
-        teamName: p.teamName || null,
-        stats: p.stats,
-        isWinner: p.isWinner,
-      })),
-    )
-  }
-
-  const allGames = await db.select().from(games)
-  const game = allGames.find((x: { id: string }) => x.id === input.gameId)
-  
-  if (input.status !== 'ongoing') {
-    const allUsers = await db.select().from(users)
-    const winners = input.participants
-      .filter((p) => p.isWinner)
-      .map(
-        (p) =>
-          '@' +
-          (allUsers.find((u: { id: string }) => u.id === p.userId)?.username ?? '?'),
-      )
-
-    let pnlNote = ''
-    if (game?.name === 'Poker') {
-      const winnerPnl = input.participants
-        .filter((p) => p.isWinner)
-        .reduce(
-          (sum, p) => sum + (Number(p.stats.chips_out) || 0) - (Number(p.stats.chips_in) || 0),
-          0,
-        )
-      if (winnerPnl > 0) pnlNote = ` (+${winnerPnl.toLocaleString('en-IN')} chips)`
-    }
-
-    await logActivity(
-      user.id,
-      'match_logged',
-      `[EXEC] $${(game?.name ?? 'GAME').toUpperCase()} match closed. Winner: ${winners.join(', ') || 'nobody'}${pnlNote}`,
-    )
-  } else {
-    await logActivity(
-      user.id,
-      'match_started',
-      `[EXEC] Started an ongoing $${(game?.name ?? 'GAME').toUpperCase()} match.`,
-    )
-  }
-
-  revalidatePath('/hub')
-  revalidatePath('/hub/games')
-  return match
-}
-
-export async function addMatchRound(input: {
-  matchId: string
-  roundNumber: number
-  type: string
-  notes?: string
-  participants: {
-    userId: string
-    teamName?: string
-    role?: string
-    stats: Record<string, any>
-    isWinner?: boolean
-  }[]
-}) {
-  const user = await requireDbUser()
-
-  const [round] = await db
-    .insert(matchRounds)
-    .values({
-      matchId: input.matchId,
-      roundNumber: input.roundNumber,
-      type: input.type,
-      notes: input.notes || null,
-      status: 'completed',
-    })
-    .returning()
-
-  // Ensure participants exist in matchParticipants
-  const currentParticipants = await db.select().from(matchParticipants).where(eq(matchParticipants.matchId, input.matchId))
-  const newParticipantIds = input.participants.map(p => p.userId).filter(id => !currentParticipants.some(cp => cp.userId === id))
-  
-  if (newParticipantIds.length > 0) {
-    await db.insert(matchParticipants).values(
-      newParticipantIds.map(id => ({
-        matchId: input.matchId,
-        userId: id,
-      }))
-    )
-  }
-
-  const updatedParticipants = await db.select().from(matchParticipants).where(eq(matchParticipants.matchId, input.matchId))
-
-  if (input.participants.length > 0) {
-    await db.insert(matchRoundStats).values(
-      input.participants.map(p => {
-        const mp = updatedParticipants.find(up => up.userId === p.userId)
-        return {
-          matchRoundId: round.id,
-          matchParticipantId: mp!.id,
-          teamName: p.teamName || null,
-          role: p.role || null,
-          stats: p.stats,
-          isWinner: p.isWinner || false,
-        }
-      })
-    )
-  }
-
-  revalidatePath('/hub')
-  revalidatePath('/hub/games')
-  return round
-}
-
-export async function completeOngoingMatch(matchId: string, winners: string[] = []) {
-  const user = await requireDbUser()
-  
-  await db.update(matches).set({ status: 'completed' }).where(eq(matches.id, matchId))
-  
-  const mps = await db.select().from(matchParticipants).where(eq(matchParticipants.matchId, matchId))
-  const [match] = await db.select().from(matches).where(eq(matches.id, matchId))
-  const [game] = await db.select().from(games).where(eq(games.id, match.gameId))
-  
-  if (winners.length === 0) {
-    // Auto calculate
-    const rounds = await db.query.matchRounds.findMany({ where: eq(matchRounds.matchId, matchId), with: { stats: true } })
-    const userScores: Record<string, number> = {}
-    
-    if (game.name === 'Cards') {
-      rounds.forEach(r => r.stats.forEach(s => {
-        userScores[s.matchParticipantId] = (userScores[s.matchParticipantId] || 0) + (Number(s.stats.hands_made) || 0)
-      }))
-    } else if (game.name === 'Badminton') {
-      rounds.forEach(r => r.stats.forEach(s => {
-        if (s.isWinner) userScores[s.matchParticipantId] = (userScores[s.matchParticipantId] || 0) + 1
-      }))
-    } else if (game.name === 'Cricket') {
-      let r1 = 0, r2 = 0;
-      let t1 = new Set<string>(), t2 = new Set<string>();
-      rounds.forEach(r => r.stats.forEach(s => {
-        if (r.roundNumber === 1) {
-          if (s.role === 'batting') { r1 += Number(s.stats.runs) || 0; t1.add(s.matchParticipantId); }
-          if (s.role === 'bowling') { t2.add(s.matchParticipantId); }
-        }
-        if (r.roundNumber === 2) {
-          if (s.role === 'batting') { r2 += Number(s.stats.runs) || 0; t2.add(s.matchParticipantId); }
-          if (s.role === 'bowling') { t1.add(s.matchParticipantId); }
-        }
-      }))
-      if (r1 > r2) t1.forEach(id => userScores[id] = 1)
-      else if (r2 > r1) t2.forEach(id => userScores[id] = 1)
-    }
-
-    if (Object.keys(userScores).length > 0) {
-      const maxScore = Math.max(...Object.values(userScores))
-      const winnerMps = Object.entries(userScores).filter(([_, score]) => score === maxScore).map(([id]) => id)
-      if (winnerMps.length > 0 && maxScore > 0) {
-        await db.update(matchParticipants).set({ isWinner: true }).where(inArray(matchParticipants.id, winnerMps))
-      }
-    }
-  } else if (winners.length > 0) {
-    const winnerMps = mps.filter(mp => winners.includes(mp.userId))
-    if (winnerMps.length > 0) {
-      await db.update(matchParticipants).set({ isWinner: true }).where(inArray(matchParticipants.id, winnerMps.map(mp => mp.id)))
-    }
-  }
-
-  await logActivity(
-    user.id,
-    'match_logged',
-    `[EXEC] $${(game?.name ?? 'GAME').toUpperCase()} match was marked as completed.`,
-  )
-
-  revalidatePath('/hub')
-  revalidatePath('/hub/games')
-}
-
 export async function getGamesData() {
   const defaultGames = [
-    { name: 'Poker', icon: '🃏', minPlayers: 2, maxPlayers: 12, statSchema: { chips_in: 'number', chips_out: 'number' } },
-    { name: 'Cards', icon: '🎴', minPlayers: 2, maxPlayers: 10, statSchema: { matchLevel: {}, roundLevel: { hands_made: 'number' } } },
-    { name: 'Badminton', icon: '🏸', minPlayers: 2, maxPlayers: 4, statSchema: { matchLevel: {}, roundLevel: { score: 'number' } } },
-    { name: 'Cricket', icon: '🏏', minPlayers: 2, maxPlayers: 22, statSchema: { matchLevel: {}, roundLevel: { batting: { runs: 'number', balls: 'number' }, bowling: { overs: 'number', wickets: 'number', runs_given: 'number' } } } },
+    { name: 'Poker', icon: '🃏', minPlayers: 2, maxPlayers: 12, statSchema: {} },
+    { name: 'Cards', icon: '🎴', minPlayers: 2, maxPlayers: 10, statSchema: {} },
+    { name: 'Badminton', icon: '🏸', minPlayers: 2, maxPlayers: 4, statSchema: {} },
+    { name: 'Cricket', icon: '🏏', minPlayers: 2, maxPlayers: 22, statSchema: {} },
   ]
 
   let allGames = await db.select().from(games)
   
-  const poker = allGames.find((g: any) => g.name === 'Poker')
-  if (poker && (poker.statSchema?.chips_won || poker.statSchema?.buy_in)) {
-    await db.update(games)
-      .set({ statSchema: { chips_in: 'number', chips_out: 'number' } })
-      .where(eq(games.name, 'Poker'))
-  }
-  
-  // Hard update schema for Cards, Badminton, Cricket
-  for (const gameName of ['Cards', 'Badminton', 'Cricket']) {
+  for (const gameName of ['Poker', 'Cards', 'Badminton', 'Cricket']) {
     const existing = allGames.find((g: any) => g.name === gameName)
     const def = defaultGames.find(g => g.name === gameName)
     if (!existing) {
       await db.insert(games).values(def as any)
-    } else {
-      await db.update(games).set({ statSchema: def?.statSchema }).where(eq(games.id, existing.id))
     }
   }
   
-  // Remove unused legacy games to clean up
-  const keepGames = ['Poker', 'Cards', 'Badminton', 'Cricket']
-  const deleteGames = allGames.filter(g => !keepGames.includes(g.name))
-  for (const dg of deleteGames) {
-    // Only delete if no matches use it
-    const m = await db.select().from(matches).where(eq(matches.gameId, dg.id))
-    if (m.length === 0) {
-      await db.delete(games).where(eq(games.id, dg.id))
-    }
-  }
-
   allGames = await db.select().from(games).orderBy(games.name)
 
   const [allMatches, members] = await Promise.all([
@@ -258,11 +31,234 @@ export async function getGamesData() {
       orderBy: [desc(matches.playedAt)],
       with: { 
         game: true, 
-        participants: { with: { user: true, roundStats: { with: { round: true } } } },
-        rounds: { orderBy: [desc(matchRounds.roundNumber)] }
+        participants: { with: { user: true } },
+        cricketMatches: { with: { innings: { with: { batterLogs: { with: { participant: true } }, bowlerLogs: { with: { participant: true } } } } } },
+        badmintonSets: { with: { player1: true, player2: true, winner: true }, orderBy: [desc(badmintonSets.setNumber)] },
+        cardRounds: { with: { hands: { with: { participant: true } } }, orderBy: [desc(cardRounds.roundNumber)] },
+        pokerLedgers: { with: { participant: true } }
       },
     }),
     db.select().from(users).orderBy(users.username),
   ])
+
   return { games: allGames, matches: allMatches, members }
+}
+
+export async function logMatch(input: {
+  gameId: string
+  participants?: { userId: string; isWinner?: boolean; stats?: any }[]
+  status?: string
+  notes?: string
+  // Game specific init logic
+  format?: string
+  maxOvers?: number
+  team1Name?: string
+  team2Name?: string
+}) {
+  const user = await requireDbUser()
+  const [game] = await db.select().from(games).where(eq(games.id, input.gameId))
+  if (!game) throw new Error('Game not found')
+
+  const [match] = await db
+    .insert(matches)
+    .values({
+      gameId: input.gameId,
+      status: input.status || 'completed',
+      notes: input.notes,
+    })
+    .returning()
+
+  // For poker we create participants right away
+  if (game.name === 'Poker' && input.participants) {
+    for (const p of input.participants) {
+      const [mp] = await db.insert(matchParticipants).values({ matchId: match.id, userId: p.userId, isWinner: p.isWinner || false }).returning()
+      if (p.stats) {
+        await db.insert(pokerLedgers).values({ matchId: match.id, matchParticipantId: mp.id, chipsIn: p.stats.chips_in || 0, chipsOut: p.stats.chips_out || 0 })
+      }
+    }
+  } else if (game.name === 'Cricket') {
+    // Initialize cricket match
+    await db.insert(cricketMatches).values({
+      matchId: match.id,
+      format: input.format || 'T20',
+      maxOvers: input.maxOvers || 20,
+      team1Name: input.team1Name || 'Team 1',
+      team2Name: input.team2Name || 'Team 2',
+    })
+  }
+
+  await logActivity(user.id, 'match_logged', `[EXEC] Created $${game.name.toUpperCase()} match.`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/games')
+  return match
+}
+
+export async function completeOngoingMatch(matchId: string) {
+  const user = await requireDbUser()
+  
+  const [match] = await db.query.matches.findFirst({
+    where: eq(matches.id, matchId),
+    with: { 
+      game: true, 
+      participants: true,
+      cricketMatches: { with: { innings: { with: { batterLogs: true, bowlerLogs: true } } } },
+      badmintonSets: true,
+      cardRounds: { with: { hands: true } },
+      pokerLedgers: true
+    }
+  }) as any;
+
+  if (!match) return;
+
+  await db.update(matches).set({ status: 'completed' }).where(eq(matches.id, matchId))
+  
+  let winnerParticipantIds: string[] = []
+
+  if (match.game.name === 'Cricket' && match.cricketMatches[0]) {
+    const cm = match.cricketMatches[0]
+    const userScores: Record<string, number> = {}
+    let r1 = 0, r2 = 0;
+    let t1 = new Set<string>(), t2 = new Set<string>();
+
+    for (const inning of cm.innings) {
+      if (inning.inningNumber === 1) {
+        r1 += inning.totalRuns
+        inning.batterLogs.forEach((b: any) => t1.add(b.matchParticipantId))
+        inning.bowlerLogs.forEach((b: any) => t2.add(b.matchParticipantId))
+      }
+      if (inning.inningNumber === 2) {
+        r2 += inning.totalRuns
+        inning.batterLogs.forEach((b: any) => t2.add(b.matchParticipantId))
+        inning.bowlerLogs.forEach((b: any) => t1.add(b.matchParticipantId))
+      }
+    }
+
+    if (r1 > r2) winnerParticipantIds = Array.from(t1)
+    else if (r2 > r1) winnerParticipantIds = Array.from(t2)
+  } else if (match.game.name === 'Badminton') {
+    const userScores: Record<string, number> = {}
+    match.badmintonSets.forEach((set: any) => {
+      if (set.winnerId) userScores[set.winnerId] = (userScores[set.winnerId] || 0) + 1
+    })
+    if (Object.keys(userScores).length > 0) {
+      const max = Math.max(...Object.values(userScores))
+      winnerParticipantIds = Object.keys(userScores).filter(k => userScores[k] === max)
+    }
+  } else if (match.game.name === 'Cards') {
+    const userScores: Record<string, number> = {}
+    match.cardRounds.forEach((r: any) => r.hands.forEach((h: any) => {
+      userScores[h.matchParticipantId] = (userScores[h.matchParticipantId] || 0) + h.handsMade
+    }))
+    if (Object.keys(userScores).length > 0) {
+      const max = Math.max(...Object.values(userScores))
+      winnerParticipantIds = Object.keys(userScores).filter(k => userScores[k] === max)
+    }
+  } else if (match.game.name === 'Poker') {
+    match.pokerLedgers.forEach((l: any) => {
+      if (l.chipsOut > l.chipsIn) winnerParticipantIds.push(l.matchParticipantId)
+    })
+  }
+
+  if (winnerParticipantIds.length > 0) {
+    await db.update(matchParticipants).set({ isWinner: true }).where(inArray(matchParticipants.id, winnerParticipantIds))
+  }
+
+  await logActivity(user.id, 'match_logged', `[EXEC] $${match.game.name.toUpperCase()} match completed.`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/games')
+}
+
+// ─── Custom Game Loggers ──────────────────────────────────────────────────
+
+async function getOrCreateParticipant(matchId: string, userId: string) {
+  let [mp] = await db.select().from(matchParticipants).where(and(eq(matchParticipants.matchId, matchId), eq(matchParticipants.userId, userId)))
+  if (!mp) {
+    [mp] = await db.insert(matchParticipants).values({ matchId, userId }).returning()
+  }
+  return mp
+}
+
+export async function logCricketOver(matchId: string, inningNumber: number, bowlerId: string, runsConceded: number, wicketsTaken: number) {
+  // Finds or creates inning
+  const [cm] = await db.select().from(cricketMatches).where(eq(cricketMatches.matchId, matchId))
+  let [inning] = await db.select().from(cricketInnings).where(and(eq(cricketInnings.cricketMatchId, cm.id), eq(cricketInnings.inningNumber, inningNumber)))
+  if (!inning) {
+    [inning] = await db.insert(cricketInnings).values({ cricketMatchId: cm.id, inningNumber, battingTeam: inningNumber === 1 ? cm.team1Name || '' : cm.team2Name || '', bowlingTeam: inningNumber === 1 ? cm.team2Name || '' : cm.team1Name || '' }).returning()
+  }
+
+  const bowlerMp = await getOrCreateParticipant(matchId, bowlerId)
+  
+  let [bowlerLog] = await db.select().from(cricketBowlerLogs).where(and(eq(cricketBowlerLogs.inningId, inning.id), eq(cricketBowlerLogs.matchParticipantId, bowlerMp.id)))
+  if (!bowlerLog) {
+    [bowlerLog] = await db.insert(cricketBowlerLogs).values({ inningId: inning.id, matchParticipantId: bowlerMp.id, overs: 1, runsConceded, wickets: wicketsTaken }).returning()
+  } else {
+    // Add overs nicely. e.g. 1.5 + 0.1 = 2.0 (simplification: assume they just bowl full overs for now or just add decimal)
+    const currentOvers = Math.floor(bowlerLog.overs)
+    const currentBalls = Math.round((bowlerLog.overs - currentOvers) * 10)
+    let newBalls = currentBalls + 6; // Assume a full over was logged
+    let newOvers = currentOvers + Math.floor(newBalls / 6) + ((newBalls % 6) / 10)
+    await db.update(cricketBowlerLogs).set({
+      overs: newOvers,
+      runsConceded: bowlerLog.runsConceded + runsConceded,
+      wickets: bowlerLog.wickets + wicketsTaken
+    }).where(eq(cricketBowlerLogs.id, bowlerLog.id))
+  }
+
+  // Update inning totals
+  await db.update(cricketInnings).set({
+    totalRuns: inning.totalRuns + runsConceded,
+    totalWickets: inning.totalWickets + wicketsTaken,
+    totalOvers: inning.totalOvers + 1
+  }).where(eq(cricketInnings.id, inning.id))
+}
+
+export async function logCricketBatter(matchId: string, inningNumber: number, batterId: string, runs: number, balls: number, isOut: boolean) {
+  const [cm] = await db.select().from(cricketMatches).where(eq(cricketMatches.matchId, matchId))
+  let [inning] = await db.select().from(cricketInnings).where(and(eq(cricketInnings.cricketMatchId, cm.id), eq(cricketInnings.inningNumber, inningNumber)))
+  if (!inning) {
+    [inning] = await db.insert(cricketInnings).values({ cricketMatchId: cm.id, inningNumber, battingTeam: inningNumber === 1 ? cm.team1Name || '' : cm.team2Name || '', bowlingTeam: inningNumber === 1 ? cm.team2Name || '' : cm.team1Name || '' }).returning()
+  }
+
+  const batterMp = await getOrCreateParticipant(matchId, batterId)
+  
+  let [batterLog] = await db.select().from(cricketBatterLogs).where(and(eq(cricketBatterLogs.inningId, inning.id), eq(cricketBatterLogs.matchParticipantId, batterMp.id)))
+  if (!batterLog) {
+    await db.insert(cricketBatterLogs).values({ inningId: inning.id, matchParticipantId: batterMp.id, runs, balls, isOut })
+  } else {
+    await db.update(cricketBatterLogs).set({ runs, balls, isOut }).where(eq(cricketBatterLogs.id, batterLog.id))
+  }
+}
+
+export async function logBadmintonSet(matchId: string, setNumber: number, p1Id: string, score1: number, p2Id: string, score2: number) {
+  const mp1 = await getOrCreateParticipant(matchId, p1Id)
+  const mp2 = await getOrCreateParticipant(matchId, p2Id)
+  const winnerId = score1 > score2 ? mp1.id : score2 > score1 ? mp2.id : null
+
+  await db.insert(badmintonSets).values({
+    matchId,
+    setNumber,
+    player1Id: mp1.id,
+    score1,
+    player2Id: mp2.id,
+    score2,
+    winnerId
+  })
+}
+
+export async function logCardsRound(matchId: string, roundNumber: number, playerHands: { userId: string, handsMade: number }[]) {
+  const [round] = await db.insert(cardRounds).values({ matchId, roundNumber }).returning()
+  for (const ph of playerHands) {
+    const mp = await getOrCreateParticipant(matchId, ph.userId)
+    await db.insert(cardPlayerHands).values({ cardRoundId: round.id, matchParticipantId: mp.id, handsMade: ph.handsMade })
+  }
+}
+
+export async function logPokerLedger(matchId: string, userId: string, chipsIn: number, chipsOut: number) {
+  const mp = await getOrCreateParticipant(matchId, userId)
+  let [ledger] = await db.select().from(pokerLedgers).where(and(eq(pokerLedgers.matchId, matchId), eq(pokerLedgers.matchParticipantId, mp.id)))
+  if (ledger) {
+    await db.update(pokerLedgers).set({ chipsIn, chipsOut }).where(eq(pokerLedgers.id, ledger.id))
+  } else {
+    await db.insert(pokerLedgers).values({ matchId, matchParticipantId: mp.id, chipsIn, chipsOut })
+  }
 }
