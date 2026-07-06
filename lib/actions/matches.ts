@@ -46,7 +46,7 @@ export async function getGamesData() {
 
 export async function logMatch(input: {
   gameId: string
-  participants?: { userId: string; isWinner?: boolean; stats?: any }[]
+  participants?: { userId: string; isWinner?: boolean; stats?: any; teamName?: string }[]
   status?: string
   notes?: string
   // Game specific init logic
