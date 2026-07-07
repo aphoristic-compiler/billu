@@ -112,7 +112,7 @@ export const aiToolsConfig = [
     type: 'function',
     function: {
       name: 'simulate_match_odds',
-      description: 'Calculates predicted odds of winning between two players OR two teams in a specific game. Performs head-to-head and overall stat simulations.',
+      description: 'Calculates predicted odds of winning between two players OR two teams in a specific game. Performs head-to-head stat simulations, and if there is an ONGOING LIVE match for this game, it factors in current match progress (wickets, run rate, target) to give LIVE odds.',
       parameters: {
         type: 'object',
         properties: {
