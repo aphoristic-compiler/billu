@@ -1545,8 +1545,16 @@ async function ai_log_cricket_stats(args: any) {
     const cricketMatch = ongoingMatches.find(m => m.game?.name === 'Cricket');
     if (!cricketMatch) return JSON.stringify({ error: 'No ongoing cricket match found.' });
 
-    const batter = await db.query.users.findFirst({ where: or(eq(users.username, args.battingPlayer.replace('@', '')), ilike(users.displayName, `%${args.battingPlayer.replace('@', '')}%`)) });
-    const bowler = await db.query.users.findFirst({ where: or(eq(users.username, args.bowlingPlayer.replace('@', '')), ilike(users.displayName, `%${args.bowlingPlayer.replace('@', '')}%`)) });
+    const currentMe = await getCurrentDbUser();
+    
+    const resolveUser = async (uname: string) => {
+      const cleanName = uname.replace('@', '').trim();
+      if ((cleanName.toLowerCase() === 'me' || cleanName.toLowerCase() === 'i') && currentMe) return currentMe;
+      return await db.query.users.findFirst({ where: or(eq(users.username, cleanName), ilike(users.displayName, `%${cleanName}%`)) });
+    };
+
+    const batter = await resolveUser(args.battingPlayer);
+    const bowler = await resolveUser(args.bowlingPlayer);
 
     if (!batter) return JSON.stringify({ error: `Batter ${args.battingPlayer} not found.` });
     if (!bowler) return JSON.stringify({ error: `Bowler ${args.bowlingPlayer} not found.` });
@@ -1568,10 +1576,12 @@ async function ai_log_cricket_stats(args: any) {
       const currentBattingTeam = args.inningNumber === 1 ? battingFirstTeam : (battingFirstTeam === team1Name ? team2Name : team1Name);
       const currentBowlingTeam = args.inningNumber === 1 ? (battingFirstTeam === team1Name ? team2Name : team1Name) : battingFirstTeam;
       
-      if (batterPart?.teamName && batterPart.teamName !== currentBattingTeam) {
+      const normalize = (s?: string | null) => (s || '').trim().toLowerCase();
+      
+      if (batterPart?.teamName && normalize(batterPart.teamName) !== normalize(currentBattingTeam) && normalize(batterPart.teamName) !== 'common') {
         return JSON.stringify({ error: `Batter ${args.battingPlayer} belongs to ${batterPart.teamName}, but ${currentBattingTeam} is batting in Inning ${args.inningNumber}.` });
       }
-      if (bowlerPart?.teamName && bowlerPart.teamName !== currentBowlingTeam) {
+      if (bowlerPart?.teamName && normalize(bowlerPart.teamName) !== normalize(currentBowlingTeam) && normalize(bowlerPart.teamName) !== 'common') {
         return JSON.stringify({ error: `Bowler ${args.bowlingPlayer} belongs to ${bowlerPart.teamName}, but ${currentBowlingTeam} is bowling in Inning ${args.inningNumber}.` });
       }
     }
@@ -1960,20 +1970,25 @@ async function ai_start_cricket_match(args: any) {
 
     const participants = [];
     
+    const currentMe = await getCurrentDbUser();
+    
+    const resolveUser = async (uname: string) => {
+      const cleanName = uname.replace('@', '').trim();
+      if ((cleanName.toLowerCase() === 'me' || cleanName.toLowerCase() === 'i') && currentMe) return currentMe;
+      return await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
+    };
+
     // Resolve user IDs
     for (const uname of args.team1Players || []) {
-      const cleanName = uname.replace('@', '');
-      const u = await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
+      const u = await resolveUser(uname);
       if (u) participants.push({ userId: u.id, teamName: args.team1Name });
     }
     for (const uname of args.team2Players || []) {
-      const cleanName = uname.replace('@', '');
-      const u = await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
+      const u = await resolveUser(uname);
       if (u) participants.push({ userId: u.id, teamName: args.team2Name });
     }
     if (args.commonPlayer) {
-      const cleanName = args.commonPlayer.replace('@', '');
-      const u = await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
+      const u = await resolveUser(args.commonPlayer);
       if (u) participants.push({ userId: u.id, teamName: 'Common' });
     }
 
