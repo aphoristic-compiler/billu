@@ -5,7 +5,7 @@ import { logMatch, autoSplitCricketTeams, getCricketStatsForPlayers } from '@/li
 import { addExpense, getSimplifiedSettlements } from '@/lib/actions/expenses'
 import { createStandalonePoll, deletePoll, archivePoll, togglePollPin } from '@/lib/actions/polls'
 import { queryMistral } from '@/lib/mistral'
-import { requireDbUser } from '@/lib/auth'
+import { requireDbUser, getCurrentDbUser } from '@/lib/auth'
 import { logSystemLeak } from '@/lib/activity'
 import { getAnalyticsData } from '@/lib/actions/analytics'
 
