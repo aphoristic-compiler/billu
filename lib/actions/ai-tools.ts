@@ -2195,7 +2195,7 @@ async function ai_resolve_username_typos(args: any) {
     });
     
     return JSON.stringify({ 
-      instruction: "Map the fuzzyNames to the exact usernames from the registeredUsers list. If the user misspelled a name or used a real name instead of a username, YOU MUST ROAST THEM in your final response for their incompetence, but silently fix it and use the correct username for any subsequent tool calls.",
+      instruction: "Map the fuzzyNames to the exact usernames from the registeredUsers list. If the user provided a real name (like 'Aryan' or 'Divyam'), you MUST quietly map it to their username WITHOUT roasting them. You are STRICTLY FORBIDDEN from roasting someone for using a real name. You may ONLY generate a roast if the user made a genuine spelling mistake/typo of a name (e.g., 'aryxn' instead of 'aryan'). Silently fix it and use the correct username for any subsequent tool calls.",
       fuzzyNamesProvided: fuzzyNames,
       registeredUsers: allUsers.map(u => ({ username: u.username, realName: u.displayName }))
     });
