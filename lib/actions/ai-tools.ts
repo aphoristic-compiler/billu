@@ -1905,16 +1905,19 @@ async function ai_start_cricket_match(args: any) {
     const participants = [];
     
     // Resolve user IDs
-    for (const uname of args.team1Players) {
-      const u = await db.query.users.findFirst({ where: ilike(users.username, uname) });
+    for (const uname of args.team1Players || []) {
+      const cleanName = uname.replace('@', '');
+      const u = await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
       if (u) participants.push({ userId: u.id, teamName: args.team1Name });
     }
-    for (const uname of args.team2Players) {
-      const u = await db.query.users.findFirst({ where: ilike(users.username, uname) });
+    for (const uname of args.team2Players || []) {
+      const cleanName = uname.replace('@', '');
+      const u = await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
       if (u) participants.push({ userId: u.id, teamName: args.team2Name });
     }
     if (args.commonPlayer) {
-      const u = await db.query.users.findFirst({ where: ilike(users.username, args.commonPlayer) });
+      const cleanName = args.commonPlayer.replace('@', '');
+      const u = await db.query.users.findFirst({ where: ilike(users.username, cleanName) });
       if (u) participants.push({ userId: u.id, teamName: 'Common' });
     }
 
