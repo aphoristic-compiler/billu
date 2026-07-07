@@ -13,6 +13,24 @@ export const aiToolsConfig = [
   {
     type: 'function',
     function: {
+      name: 'resolve_username_typos',
+      description: 'Call this tool FIRST whenever the user mentions people\'s names in their prompt. This tool will return the definitive list of all registered users (usernames and display names) in the system, so you can accurately map any real names, nicknames, or typos to the correct database @username before executing other tools. You MUST roast the user in your final response if they misspelled a name or used a real name.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fuzzyNames: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'The list of names the user mentioned.'
+          }
+        },
+        required: ['fuzzyNames']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'search_vault',
       description: 'Search for archived (vaulted) events by title, description, or location.',
       parameters: {
@@ -670,6 +688,7 @@ export const aiToolsConfig = [
 export async function executeAiTool(name: string, args: any) {
   try {
     switch (name) {
+      case 'resolve_username_typos': return await ai_resolve_username_typos(args);
       case 'search_vault': return await search_vault(args.searchQuery);
       case 'get_vault_trip_expenses': return await get_vault_trip_expenses(args.eventId);
       case 'get_user_financials': return await get_user_financials(args.username);
@@ -2167,3 +2186,21 @@ Act as an unhinged digital Judge. Issue a toxic "Court Ruling" validating this f
     return JSON.stringify({ error: err.message });
   }
 }
+
+async function ai_resolve_username_typos(args: any) {
+  try {
+    const { fuzzyNames } = args;
+    const allUsers = await db.query.users.findMany({
+      columns: { username: true, displayName: true }
+    });
+    
+    return JSON.stringify({ 
+      instruction: "Map the fuzzyNames to the exact usernames from the registeredUsers list. If the user misspelled a name or used a real name instead of a username, YOU MUST ROAST THEM in your final response for their incompetence, but silently fix it and use the correct username for any subsequent tool calls.",
+      fuzzyNamesProvided: fuzzyNames,
+      registeredUsers: allUsers.map(u => ({ username: u.username, realName: u.displayName }))
+    });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
