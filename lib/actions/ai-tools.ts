@@ -1,7 +1,7 @@
 import { db, events, expenses, debts, users, matchParticipants, matches, games, polls, pollOptions, pollVotes, systemLeaks, rsvps } from '@/lib/db'
 import { eq, or, ilike, and, desc, sql } from 'drizzle-orm'
 import { createEvent, updateEvent, addMicroEvent, deleteEvent, archiveEvent, toggleEventPin } from '@/lib/actions/events'
-import { logMatch, autoSplitCricketTeams } from '@/lib/actions/matches'
+import { logMatch, autoSplitCricketTeams, getCricketStatsForPlayers } from '@/lib/actions/matches'
 import { addExpense, getSimplifiedSettlements } from '@/lib/actions/expenses'
 import { createStandalonePoll, deletePoll, archivePoll, togglePollPin } from '@/lib/actions/polls'
 import { queryMistral } from '@/lib/mistral'
@@ -1148,6 +1148,61 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
     t2Odds = (t2OddsScore / sumOdds) * 100;
   }
 
+  // 5.5. Cricket-Specific Stats adjustment
+  let cricketStatsVerdict = "";
+  if (gameName.toLowerCase() === 'cricket') {
+    const t1CricketStats = await getCricketStatsForPlayers(t1Ids);
+    const t2CricketStats = await getCricketStatsForPlayers(t2Ids);
+
+    const calcTeamSkill = (statsObj: Record<string, any>) => {
+      let totalSkill = 0;
+      Object.values(statsObj).forEach((s: any) => {
+        const rAvg = parseFloat(s.recent.avg) || 0;
+        const rSr = parseFloat(s.recent.sr) || 0;
+        const rWkts = s.recent.wickets || 0;
+        const rEcon = parseFloat(s.recent.econ) || 0;
+        const aAvg = parseFloat(s.allTime.avg) || 0;
+        const aSr = parseFloat(s.allTime.sr) || 0;
+        const aWkts = s.allTime.wickets || 0;
+        const aEcon = parseFloat(s.allTime.econ) || 0;
+
+        // Weight recent form more (60%) than all-time form (40%)
+        const avgAvg = (rAvg * 0.6) + (aAvg * 0.4);
+        const avgSr = (rSr * 0.6) + (aSr * 0.4);
+        const wktMetric = (rWkts * 0.6) + (aWkts * 0.4);
+        const econMetric = rEcon > 0 ? ((rEcon * 0.6) + (aEcon * 0.4)) : aEcon;
+
+        // Batting rating: Average + (Strike Rate / 2)
+        const batRating = avgAvg + (avgSr / 2);
+        
+        // Bowling rating: Wickets * 10 + (Econ > 0 ? (120 / Econ) : 0)
+        const bowlRating = (wktMetric * 10) + (econMetric > 0 ? (120 / econMetric) : 0);
+
+        totalSkill += batRating + bowlRating;
+      });
+      return totalSkill;
+    };
+
+    const t1Skill = calcTeamSkill(t1CricketStats);
+    const t2Skill = calcTeamSkill(t2CricketStats);
+
+    const totalSkill = t1Skill + t2Skill;
+    if (totalSkill > 0) {
+      // Scale skill to a percentage bonus, max 15% shift
+      const t1SkillPct = t1Skill / totalSkill;
+      const t1Shift = (t1SkillPct - 0.5) * 30; // Max 15% diff in either direction (30 * 0.5 = 15)
+      
+      t1Odds += t1Shift;
+      t2Odds -= t1Shift;
+
+      // Clamp odds
+      t1Odds = Math.max(5, Math.min(95, t1Odds));
+      t2Odds = 100 - t1Odds;
+
+      cricketStatsVerdict = `Cricket Stats Adjusted: T1 Skill ${Math.round(t1Skill)} vs T2 Skill ${Math.round(t2Skill)} based on batting & bowling records.`;
+    }
+  }
+
   // Format outputs
   const t1Names = t1.map(u => `@${u.username}`).join(', ');
   const t2Names = t2.map(u => `@${u.username}`).join(', ');
@@ -1300,6 +1355,7 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
       financials_and_grinds: t2Degen.details
     },
     h2h_history: h2hVerdict,
+    cricket_stats_analysis: cricketStatsVerdict || undefined,
     live_in_play: liveInPlayDetails,
     degen_analysis: roastSummary,
     lore_dossier: loreRoast || undefined,

@@ -348,6 +348,109 @@ export async function logPokerLedger(matchId: string, userId: string, chipsIn: n
   }
 }
 
+export async function getCricketStatsForPlayers(userIds: string[]) {
+  const statsMap: Record<string, any> = {};
+  
+  if (!userIds || userIds.length === 0) return statsMap;
+
+  const participations = await db.query.matchParticipants.findMany({
+    where: inArray(matchParticipants.userId, userIds),
+    with: { 
+      cricketBatterLogs: true, 
+      cricketBowlerLogs: true,
+      user: true,
+      match: { columns: { playedAt: true, gameId: true } }
+    }
+  });
+
+  // Filter only cricket matches (we assume if it has cricket logs it's a cricket match, but let's just group by user)
+  const groupedByUser = participations.reduce((acc, p) => {
+    if (!acc[p.userId]) acc[p.userId] = [];
+    acc[p.userId].push(p);
+    return acc;
+  }, {} as Record<string, typeof participations>);
+
+  for (const uid of userIds) {
+    const parts = groupedByUser[uid] || [];
+    if (parts.length === 0) continue;
+    
+    // Sort by match date descending (most recent first)
+    parts.sort((a, b) => new Date(b.match?.playedAt || 0).getTime() - new Date(a.match?.playedAt || 0).getTime());
+
+    const user = parts[0].user;
+    if (!user) continue;
+
+    let allTimeRuns = 0;
+    let allTimeBalls = 0;
+    let allTimeWickets = 0;
+    let allTimeRunsGiven = 0;
+    let allTimeOvers = 0;
+    let allTimeOuts = 0;
+
+    let recentRuns = 0;
+    let recentBalls = 0;
+    let recentWickets = 0;
+    let recentRunsGiven = 0;
+    let recentOvers = 0;
+    let recentOuts = 0;
+
+    const RECENT_LIMIT = 10;
+    let matchCount = 0;
+
+    for (const p of parts) {
+      const isRecent = matchCount < RECENT_LIMIT;
+      matchCount++;
+
+      for (const b of p.cricketBatterLogs) {
+        allTimeRuns += b.runs || 0;
+        allTimeBalls += b.balls || 0;
+        if (b.isOut) allTimeOuts++;
+        if (isRecent) {
+          recentRuns += b.runs || 0;
+          recentBalls += b.balls || 0;
+          if (b.isOut) recentOuts++;
+        }
+      }
+
+      for (const b of p.cricketBowlerLogs) {
+        allTimeWickets += b.wickets || 0;
+        allTimeRunsGiven += b.runsGiven || 0;
+        allTimeOvers += b.overs || 0;
+        if (isRecent) {
+          recentWickets += b.wickets || 0;
+          recentRunsGiven += b.runsGiven || 0;
+          recentOvers += b.overs || 0;
+        }
+      }
+    }
+
+    const calcAvg = (runs: number, outs: number) => outs > 0 ? (runs / outs) : runs;
+    const calcSR = (runs: number, balls: number) => balls > 0 ? (runs / balls * 100) : 0;
+    const calcEcon = (runsGiven: number, overs: number) => overs > 0 ? (runsGiven / overs) : 0;
+
+    statsMap[uid] = {
+      username: user.username,
+      role: user.cricketRole || 'Unknown',
+      allTime: {
+        matches: parts.length,
+        avg: calcAvg(allTimeRuns, allTimeOuts).toFixed(1),
+        sr: calcSR(allTimeRuns, allTimeBalls).toFixed(1),
+        wickets: allTimeWickets,
+        econ: calcEcon(allTimeRunsGiven, allTimeOvers).toFixed(1),
+      },
+      recent: {
+        matches: Math.min(parts.length, RECENT_LIMIT),
+        avg: calcAvg(recentRuns, recentOuts).toFixed(1),
+        sr: calcSR(recentRuns, recentBalls).toFixed(1),
+        wickets: recentWickets,
+        econ: calcEcon(recentRunsGiven, recentOvers).toFixed(1),
+      }
+    };
+  }
+
+  return statsMap;
+}
+
 export async function autoSplitCricketTeams(usernames: string[]) {
   if (usernames.length < 2) throw new Error("Need at least 2 players");
   
@@ -355,18 +458,24 @@ export async function autoSplitCricketTeams(usernames: string[]) {
     const cleanNames = usernames.map(u => u.replace('@', ''));
     const players = await db.query.users.findMany({
       where: inArray(users.username, cleanNames),
-      columns: { username: true, cricketRole: true }
+      columns: { id: true, username: true, cricketRole: true }
     });
     
-    const playersWithRoles = players.map(p => `${p.username} (${p.cricketRole || 'Unknown'})`).join(', ');
+    const statsMap = await getCricketStatsForPlayers(players.map(p => p.id));
+    
+    const playersWithStats = players.map(p => {
+      const stats = statsMap[p.id];
+      if (!stats) return `${p.username} (${p.cricketRole || 'Unknown'} - No history)`;
+      return `${p.username} (${stats.role}) | Recent(last 10): Avg ${stats.recent.avg}, SR ${stats.recent.sr}, Wkts ${stats.recent.wickets}, Econ ${stats.recent.econ} | All-time: Avg ${stats.allTime.avg}, SR ${stats.allTime.sr}, Wkts ${stats.allTime.wickets}, Econ ${stats.allTime.econ}`;
+    }).join('\n');
 
-    const prompt = `Split these players into two balanced cricket teams based on their roles: ${playersWithRoles}.
-Attempt to balance batsmen and bowlers equally between the two teams.
-If there is an odd number of players, assign exactly one as commonPlayer (preferably an all-rounder if available).
+    const prompt = `Split these players into two balanced cricket teams based on their historical stats and roles:\n${playersWithStats}\n
+Attempt to balance both batting firepower (Avg, SR) and bowling effectiveness (Wkts, Econ) equally between the two teams. Give recent form (last 10 matches) higher weighting than all-time form.
+If there is an odd number of players, assign exactly one as commonPlayer (preferably the best all-rounder).
 Return strictly JSON format: { "team1": ["u1"], "team2": ["u2"], "commonPlayer": "u3" | null, "roast": "a witty toxic roast about this selection" }`;
     
     const responseText = await queryMistral([
-      { role: 'system', content: 'You are a toxic AI cricket manager. Always return JSON.' },
+      { role: 'system', content: 'You are a toxic AI cricket manager and data analyst. Always return JSON.' },
       { role: 'user', content: prompt }
     ]);
     
