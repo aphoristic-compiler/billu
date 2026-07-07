@@ -470,6 +470,7 @@ export async function autoSplitCricketTeams(usernames: string[]) {
     }).join('\n');
 
     const prompt = `Split these players into two balanced cricket teams based on their historical stats and roles:\n${playersWithStats}\n
+CRITICAL: Ensure BOTH teams have an equal mix of batsmen and bowlers. DO NOT put all batsmen on one team and all bowlers on another!
 Attempt to balance both batting firepower (Avg, SR) and bowling effectiveness (Wkts, Econ) equally between the two teams. Give recent form (last 10 matches) higher weighting than all-time form.
 If there is an odd number of players, assign exactly one as commonPlayer (preferably the best all-rounder).
 Return strictly JSON format: { "team1": ["u1"], "team2": ["u2"], "commonPlayer": "u3" | null, "roast": "a witty toxic roast about this selection" }`;

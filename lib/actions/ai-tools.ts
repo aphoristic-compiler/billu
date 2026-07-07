@@ -1844,7 +1844,7 @@ async function ai_get_full_leaderboard() {
 async function ai_list_wing_members() {
   try {
     const allMembers = await db.query.users.findMany();
-    const result = allMembers.map((m: any) => `@${m.username} (${m.displayName})`);
+    const result = allMembers.map((m: any) => `@${m.username} (${m.displayName}) - Role: ${m.cricketRole || 'Unassigned'}`);
     return JSON.stringify({ members: result });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
