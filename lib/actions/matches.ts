@@ -352,8 +352,17 @@ export async function autoSplitCricketTeams(usernames: string[]) {
   if (usernames.length < 2) throw new Error("Need at least 2 players");
   
   try {
-    const prompt = `Split these players into two balanced cricket teams: ${usernames.join(', ')}.
-Analyze their roles if you know them. If odd number of players, assign one as commonPlayer.
+    const cleanNames = usernames.map(u => u.replace('@', ''));
+    const players = await db.query.users.findMany({
+      where: inArray(users.username, cleanNames),
+      columns: { username: true, cricketRole: true }
+    });
+    
+    const playersWithRoles = players.map(p => `${p.username} (${p.cricketRole || 'Unknown'})`).join(', ');
+
+    const prompt = `Split these players into two balanced cricket teams based on their roles: ${playersWithRoles}.
+Attempt to balance batsmen and bowlers equally between the two teams.
+If there is an odd number of players, assign exactly one as commonPlayer (preferably an all-rounder if available).
 Return strictly JSON format: { "team1": ["u1"], "team2": ["u2"], "commonPlayer": "u3" | null, "roast": "a witty toxic roast about this selection" }`;
     
     const responseText = await queryMistral([
