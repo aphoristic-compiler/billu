@@ -283,11 +283,22 @@ function LogRoundForm({ match, members, onClose }: any) {
   const team1Name = cm?.team1Name
   const team2Name = cm?.team2Name
 
-  const currentBattingTeam = inningNumber === 1 ? battingFirstTeam : (battingFirstTeam === team1Name ? team2Name : team1Name);
-  const currentBowlingTeam = inningNumber === 1 ? (battingFirstTeam === team1Name ? team2Name : team1Name) : battingFirstTeam;
+  const normalize = (s?: string | null) => (s || '').trim().toLowerCase();
+  const t1 = normalize(team1Name);
+  const bf = normalize(battingFirstTeam);
 
-  const battingPlayers = match.participants?.filter((p: any) => p.teamName === currentBattingTeam || p.teamName === 'Common') || []
-  const bowlingPlayers = match.participants?.filter((p: any) => p.teamName === currentBowlingTeam || p.teamName === 'Common') || []
+  const team1IsBattingFirst = bf === t1 || t1.includes(bf) || bf.includes(t1);
+  
+  const currentBattingTeam = inningNumber === 1 
+    ? (team1IsBattingFirst ? team1Name : team2Name)
+    : (team1IsBattingFirst ? team2Name : team1Name);
+    
+  const currentBowlingTeam = inningNumber === 1 
+    ? (team1IsBattingFirst ? team2Name : team1Name) 
+    : (team1IsBattingFirst ? team1Name : team2Name);
+
+  const battingPlayers = match.participants?.filter((p: any) => normalize(p.teamName) === normalize(currentBattingTeam) || normalize(p.teamName) === 'common') || []
+  const bowlingPlayers = match.participants?.filter((p: any) => normalize(p.teamName) === normalize(currentBowlingTeam) || normalize(p.teamName) === 'common') || []
 
   // Auto switch inning based on wickets and overs
   useEffect(() => {
@@ -381,6 +392,10 @@ function LogRoundForm({ match, members, onClose }: any) {
                   bowlingPlayers.map((p: any) => (
                     <option key={p.userId} value={p.userId}>@{p.user?.username}</option>
                   ))
+                ) : match.participants && match.participants.length > 0 ? (
+                  match.participants.map((m: any) => (
+                    <option key={m.userId} value={m.userId}>@{m.user?.username} ({m.teamName})</option>
+                  ))
                 ) : (
                   members.map((m: any) => (
                     <option key={m.id} value={m.id}>@{m.username}</option>
@@ -401,6 +416,10 @@ function LogRoundForm({ match, members, onClose }: any) {
                 {battingPlayers.length > 0 ? (
                   battingPlayers.map((p: any) => (
                     <option key={p.userId} value={p.userId}>@{p.user?.username}</option>
+                  ))
+                ) : match.participants && match.participants.length > 0 ? (
+                  match.participants.map((m: any) => (
+                    <option key={m.userId} value={m.userId}>@{m.user?.username} ({m.teamName})</option>
                   ))
                 ) : (
                   members.map((m: any) => (
