@@ -596,7 +596,20 @@ export const aiToolsConfig = [
           tossWinner: { type: 'string', description: 'Name of team that won toss' },
           battingFirst: { type: 'string', description: 'Name of team that bats first' }
         },
-        required: ['format', 'maxOvers', 'team1Name', 'team2Name', 'team1Players', 'team2Players', 'tossWinner', 'battingFirst']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_cricket_match',
+      description: 'Updates settings of an ongoing cricket match, such as changing the maximum number of overs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          maxOvers: { type: 'number', description: 'The new maximum number of overs for the match.' }
+        },
+        required: ['maxOvers']
       }
     }
   },
@@ -714,6 +727,7 @@ export async function executeAiTool(name: string, args: any) {
         case 'change_cricket_role': return await ai_change_cricket_role(args);
         case 'split_cricket_teams': return await ai_split_cricket_teams(args);
         case 'start_cricket_match': return await ai_start_cricket_match(args);
+        case 'update_cricket_match': return await ai_update_cricket_match(args);
         case 'log_cards_round': return await ai_log_cards_round(args);
         case 'log_badminton_set': return await ai_log_badminton_set(args);
 
@@ -2005,6 +2019,21 @@ async function ai_start_cricket_match(args: any) {
     });
 
     return JSON.stringify({ success: true, message: `Started ${args.format} match between ${args.team1Name} and ${args.team2Name} with toss winner ${args.tossWinner} batting first: ${args.battingFirst}.` });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_update_cricket_match(args: any) {
+  try {
+    const ongoingMatches = await db.query.matches.findMany({ where: eq(matches.status, 'ongoing'), with: { game: true } });
+    const cricketMatch = ongoingMatches.find(m => m.game?.name === 'Cricket');
+    if (!cricketMatch) return JSON.stringify({ error: 'No ongoing cricket match found.' });
+
+    const { updateCricketMatchSettings } = await import('@/lib/actions/matches');
+    await updateCricketMatchSettings(cricketMatch.id, args.maxOvers);
+
+    return JSON.stringify({ success: true, message: `Successfully updated the ongoing cricket match max overs to ${args.maxOvers}.` });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }

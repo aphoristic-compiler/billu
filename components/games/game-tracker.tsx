@@ -175,75 +175,75 @@ function CricketScorecard({ match }: any) {
         <p className="font-semibold text-sm opacity-80">{cm.format} • {cm.maxOvers} Overs</p>
       </div>
       {cm.innings?.map((inning: any, idx: number) => (
-        <div key={inning.id} className="mb-4 overflow-hidden rounded-lg bg-gradient-to-b from-card/80 to-card/40 border border-border/50 shadow-sm backdrop-blur-sm">
+        <div key={inning.id} className="mb-4 overflow-hidden rounded-xl bg-card border border-border/50 shadow-md">
           {/* Inning Header */}
-          <div className="p-3 bg-secondary/10 border-b border-border/50 flex justify-between items-center">
-            <div>
-              <p className="font-bold text-sm text-secondary">
-                {inning.battingTeam} Inning
+          <div className="p-4 bg-gradient-to-r from-primary/20 via-accent/10 to-transparent border-b border-border/50 flex justify-between items-center">
+            <div className="flex-1 min-w-0 pr-2">
+              <p className="font-extrabold text-base text-primary truncate">
+                {inning.battingTeam} <span className="opacity-70 text-sm font-semibold">Inning</span>
               </p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5 truncate">
                 vs {inning.bowlingTeam}
               </p>
             </div>
-            <div className="text-right">
-              <div className="flex items-end justify-end gap-1">
-                <span className="text-2xl font-black">{inning.totalRuns}</span>
-                <span className="text-lg font-bold text-muted-foreground pb-1">/ {inning.totalWickets}</span>
+            <div className="text-right flex-shrink-0">
+              <div className="flex items-baseline justify-end gap-1">
+                <span className="text-3xl font-black text-foreground">{inning.totalRuns}</span>
+                <span className="text-xl font-bold text-muted-foreground">/ {inning.totalWickets}</span>
               </div>
-              <p className="text-xs text-muted-foreground font-medium">
+              <p className="text-xs text-muted-foreground font-semibold">
                 {inning.totalOvers.toFixed(1)} Ov
               </p>
             </div>
           </div>
 
           {/* Match Context Status */}
-          <div className="px-3 py-2 bg-background/30 flex justify-between items-center text-xs">
+          <div className="px-4 py-2.5 bg-background/50 flex flex-wrap gap-2 justify-between items-center text-xs">
             <div className="flex gap-2 items-center">
-              {inning.isDeclared && <span className="bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold text-[9px] uppercase tracking-wider">Declared</span>}
+              {inning.isDeclared && <span className="bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded-sm font-bold text-[10px] uppercase tracking-wider shadow-sm">Declared</span>}
             </div>
             {getTargetStatus(inning, idx) && (
-              <p className="text-profit font-bold animate-pulse">
+              <p className="text-accent font-bold animate-pulse text-[11px] sm:text-xs text-right">
                 {getTargetStatus(inning, idx)}
               </p>
             )}
             {getTarget(inning, idx) !== null && !getTargetStatus(inning, idx)?.includes("Target achieved") && (
-               <p className="text-muted-foreground font-semibold">Target: <span className="text-foreground">{getTarget(inning, idx)}</span></p>
+               <p className="text-muted-foreground font-semibold text-[11px] sm:text-xs">Target: <span className="text-foreground">{getTarget(inning, idx)}</span></p>
             )}
           </div>
           
           {/* Scorecard Dropdown */}
           {(inning.batterLogs?.length > 0 || inning.bowlerLogs?.length > 0) && (
             <details className="text-sm group">
-              <summary className="cursor-pointer font-bold text-xs text-secondary/80 bg-background/50 p-2 text-center hover:bg-secondary/10 transition-colors outline-none list-none uppercase tracking-widest border-t border-border/50">
+              <summary className="cursor-pointer font-bold text-xs text-primary/80 bg-background/30 p-2.5 text-center hover:bg-primary/10 transition-colors outline-none list-none uppercase tracking-[0.2em] border-t border-border/50">
                 <span className="group-open:hidden">▼ View Scorecard</span>
                 <span className="hidden group-open:inline">▲ Hide Scorecard</span>
               </summary>
-              <div className="bg-background/80">
+              <div className="bg-background/90">
                 {inning.batterLogs?.length > 0 && (
                   <div className="p-0">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-muted/30">
-                        <tr className="text-muted-foreground font-semibold">
-                          <th className="py-2 pl-3 font-medium">Batter</th>
-                          <th className="py-2 text-center font-medium w-8">R</th>
-                          <th className="py-2 text-center font-medium w-8">B</th>
-                          <th className="py-2 pr-3 text-right font-medium w-12">SR</th>
+                    <table className="w-full text-left text-[11px] sm:text-xs">
+                      <thead className="bg-muted/40">
+                        <tr className="text-muted-foreground font-bold tracking-wider">
+                          <th className="py-2.5 pl-4 font-semibold">Batter</th>
+                          <th className="py-2.5 text-center font-semibold w-8 sm:w-10">R</th>
+                          <th className="py-2.5 text-center font-semibold w-8 sm:w-10">B</th>
+                          <th className="py-2.5 pr-4 text-right font-semibold w-12 sm:w-14">SR</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border/30">
+                      <tbody className="divide-y divide-border/40">
                         {inning.batterLogs.map((b: any) => (
-                          <tr key={b.id} className="hover:bg-muted/10 transition-colors">
-                            <td className="py-2 pl-3 flex flex-col">
-                              <span className={b.isOut ? 'text-muted-foreground' : 'text-foreground font-medium'}>
+                          <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="py-2.5 pl-4 flex flex-col justify-center min-w-[100px]">
+                              <span className={`truncate max-w-[120px] sm:max-w-[200px] ${b.isOut ? 'text-muted-foreground' : 'text-foreground font-bold'}`}>
                                 {b.participant?.user?.username}
                               </span>
-                              {b.isOut && <span className="text-[9px] text-destructive tracking-wide">OUT</span>}
-                              {!b.isOut && b.balls > 0 && <span className="text-[9px] text-profit tracking-wide">NOT OUT</span>}
+                              {b.isOut && <span className="text-[9px] text-destructive tracking-widest font-semibold mt-0.5">OUT</span>}
+                              {!b.isOut && b.balls > 0 && <span className="text-[9px] text-profit tracking-widest font-semibold mt-0.5">NOT OUT</span>}
                             </td>
-                            <td className="py-2 text-center font-bold text-foreground">{b.runs}</td>
-                            <td className="py-2 text-center text-muted-foreground">{b.balls}</td>
-                            <td className="py-2 pr-3 text-right text-muted-foreground">
+                            <td className="py-2.5 text-center font-black text-foreground text-sm">{b.runs}</td>
+                            <td className="py-2.5 text-center text-muted-foreground">{b.balls}</td>
+                            <td className="py-2.5 pr-4 text-right font-medium text-muted-foreground">
                               {b.balls > 0 ? ((b.runs / b.balls) * 100).toFixed(1) : '0.0'}
                             </td>
                           </tr>
@@ -254,24 +254,28 @@ function CricketScorecard({ match }: any) {
                 )}
                 {inning.bowlerLogs?.length > 0 && (
                   <div className="p-0 border-t border-border/50">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-muted/30">
-                        <tr className="text-muted-foreground font-semibold">
-                          <th className="py-2 pl-3 font-medium">Bowler</th>
-                          <th className="py-2 text-center font-medium w-8">O</th>
-                          <th className="py-2 text-center font-medium w-8">R</th>
-                          <th className="py-2 pr-3 text-right font-medium w-8">W</th>
+                    <table className="w-full text-left text-[11px] sm:text-xs">
+                      <thead className="bg-muted/40">
+                        <tr className="text-muted-foreground font-bold tracking-wider">
+                          <th className="py-2.5 pl-4 font-semibold">Bowler</th>
+                          <th className="py-2.5 text-center font-semibold w-8 sm:w-10">O</th>
+                          <th className="py-2.5 text-center font-semibold w-8 sm:w-10">R</th>
+                          <th className="py-2.5 text-center font-semibold w-8 sm:w-10">W</th>
+                          <th className="py-2.5 pr-4 text-right font-semibold w-12 sm:w-14">ECON</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border/30">
+                      <tbody className="divide-y divide-border/40">
                         {inning.bowlerLogs.map((b: any) => (
-                          <tr key={b.id} className="hover:bg-muted/10 transition-colors">
-                            <td className="py-2 pl-3 text-foreground font-medium">
+                          <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="py-2.5 pl-4 font-bold text-foreground truncate max-w-[120px] sm:max-w-[200px]">
                               {b.participant?.user?.username}
                             </td>
-                            <td className="py-2 text-center text-muted-foreground">{Number(b.overs).toFixed(1)}</td>
-                            <td className="py-2 text-center text-muted-foreground">{b.runsConceded}</td>
-                            <td className="py-2 pr-3 text-right font-bold text-foreground">{b.wickets}</td>
+                            <td className="py-2.5 text-center text-muted-foreground font-medium">{Number(b.overs).toFixed(1)}</td>
+                            <td className="py-2.5 text-center font-semibold text-foreground">{b.runsConceded}</td>
+                            <td className="py-2.5 text-center font-black text-accent text-sm">{b.wickets}</td>
+                            <td className="py-2.5 pr-4 text-right font-medium text-muted-foreground">
+                              {b.overs > 0 ? (b.runsConceded / b.overs).toFixed(1) : '0.0'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

@@ -115,6 +115,15 @@ export async function deleteMatch(matchId: string) {
   revalidatePath('/hub/games')
 }
 
+export async function updateCricketMatchSettings(matchId: string, maxOvers: number) {
+  const user = await requireDbUser()
+  await db.update(matches).set({ maxOvers }).where(eq(matches.id, matchId))
+  await db.update(cricketMatches).set({ maxOvers }).where(eq(cricketMatches.matchId, matchId))
+  await logActivity(user.id, 'match_updated', `[ADMIN] Updated match overs to ${maxOvers}.`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/games')
+}
+
 export async function archiveMatch(matchId: string) {
   const user = await requireDbUser()
   await db.update(matches).set({ isArchived: true }).where(eq(matches.id, matchId))
