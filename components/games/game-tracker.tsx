@@ -607,9 +607,11 @@ function RecordMatchForm({ games, members, onClose }: any) {
       const usernames = playingSquad.map(id => members.find((m: any) => m.id === id)?.username).filter(Boolean);
       const splitResult = await autoSplitCricketTeams(usernames);
       
-      const t1Ids = splitResult.team1.map((un: string) => members.find((m: any) => m.username === un)?.id).filter(Boolean);
-      const t2Ids = splitResult.team2.map((un: string) => members.find((m: any) => m.username === un)?.id).filter(Boolean);
-      const commonId = splitResult.commonPlayer ? members.find((m: any) => m.username === splitResult.commonPlayer)?.id : null;
+      const resolveId = (un: string) => members.find((m: any) => m.username.toLowerCase() === un.replace('@', '').trim().toLowerCase())?.id;
+      
+      const t1Ids = splitResult.team1.map(resolveId).filter(Boolean);
+      const t2Ids = splitResult.team2.map(resolveId).filter(Boolean);
+      const commonId = splitResult.commonPlayer ? resolveId(splitResult.commonPlayer) : null;
       
       setTeam1Members(t1Ids);
       setTeam2Members(t2Ids);
