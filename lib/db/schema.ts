@@ -60,6 +60,14 @@ export const leakRarityEnum = pgEnum("leak_rarity", [
   "legendary",
 ])
 
+export const cricketRoleEnum = pgEnum("cricket_role", [
+  "batsman",
+  "bowler",
+  "batting_all_rounder",
+  "bowling_all_rounder",
+  "wicket_keeper",
+])
+
 // ─── 1. users ─────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -67,6 +75,7 @@ export const users = pgTable("users", {
   username: varchar("username", { length: 100 }).notNull().unique(),
   displayName: varchar("display_name", { length: 255 }).notNull(),
   avatarUrl: text("avatar_url"),
+  cricketRole: cricketRoleEnum("cricket_role"),
   bootSequenceSeen: boolean("boot_sequence_seen").notNull().default(false),
   soundEnabled: boolean("sound_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -177,6 +186,7 @@ export const matches = pgTable("matches", {
   notes: text("notes"),
   status: varchar("status", { length: 20 }).notNull().default("completed"),
   maxOvers: integer("max_overs"), // used for cricket
+  isArchived: boolean("is_archived").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 })
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { logMatch, completeOngoingMatch, logCricketOver, logCricketBatter, logBadmintonSet, logCardsRound, logPokerLedger, deleteMatch } from '@/lib/actions/matches'
+import { logMatch, completeOngoingMatch, logCricketOver, logCricketBatter, logBadmintonSet, logCardsRound, logPokerLedger, deleteMatch, autoSplitCricketTeams } from '@/lib/actions/matches'
 import { CandlestickButton } from '@/components/candlestick-button'
 import { toast } from '@/components/terminal-toast'
 import { cn } from '@/lib/utils'
@@ -188,6 +188,64 @@ function CricketScorecard({ match }: any) {
             </p>
           )}
           {inning.isDeclared && <p className="text-[10px] text-profit border border-profit px-1 inline-block mt-1">DECLARED</p>}
+          
+          {(inning.batterLogs?.length > 0 || inning.bowlerLogs?.length > 0) && (
+            <details className="mt-2 text-[10px] border border-border/50 bg-card/50 p-2 group">
+              <summary className="cursor-pointer font-bold text-secondary group-open:mb-2 outline-none">VIEW SCORECARD</summary>
+              <div className="space-y-3">
+                {inning.batterLogs?.length > 0 && (
+                  <div>
+                    <p className="font-bold border-b border-border/50 pb-1 mb-1">BATTERS</p>
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-muted-foreground opacity-70">
+                          <th>Batsman</th>
+                          <th>R</th>
+                          <th>B</th>
+                          <th>SR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inning.batterLogs.map((b: any) => (
+                          <tr key={b.id} className="border-b border-border/20 last:border-0">
+                            <td className={b.isOut ? 'text-muted-foreground' : 'font-bold'}>
+                              @{b.participant?.user?.username} {b.isOut && <span className="text-[8px] italic">(out)</span>}
+                            </td>
+                            <td>{b.runsScored}</td>
+                            <td>{b.ballsFaced}</td>
+                            <td>{b.ballsFaced > 0 ? ((b.runsScored / b.ballsFaced) * 100).toFixed(1) : '0.0'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {inning.bowlerLogs?.length > 0 && (
+                  <div>
+                    <p className="font-bold border-b border-border/50 pb-1 mb-1">BOWLERS</p>
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-muted-foreground opacity-70">
+                          <th>Bowler</th>
+                          <th>R</th>
+                          <th>W</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inning.bowlerLogs.map((b: any) => (
+                          <tr key={b.id} className="border-b border-border/20 last:border-0">
+                            <td>@{b.participant?.user?.username}</td>
+                            <td>{b.runsConceded}</td>
+                            <td>{b.wicketsTaken}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
         </div>
       ))}
     </div>
@@ -228,8 +286,8 @@ function LogRoundForm({ match, members, onClose }: any) {
   const currentBattingTeam = inningNumber === 1 ? battingFirstTeam : (battingFirstTeam === team1Name ? team2Name : team1Name);
   const currentBowlingTeam = inningNumber === 1 ? (battingFirstTeam === team1Name ? team2Name : team1Name) : battingFirstTeam;
 
-  const battingPlayers = match.participants?.filter((p: any) => p.teamName === currentBattingTeam) || []
-  const bowlingPlayers = match.participants?.filter((p: any) => p.teamName === currentBowlingTeam) || []
+  const battingPlayers = match.participants?.filter((p: any) => p.teamName === currentBattingTeam || p.teamName === 'Common') || []
+  const bowlingPlayers = match.participants?.filter((p: any) => p.teamName === currentBowlingTeam || p.teamName === 'Common') || []
 
   // Auto switch inning based on wickets and overs
   useEffect(() => {
@@ -476,12 +534,40 @@ function RecordMatchForm({ games, members, onClose }: any) {
   const game = games.find((g: any) => g.id === gameId)
 
   const [cricketForm, setCricketForm] = useState({ format: 'T20', maxOvers: '20', team1: 'Team A', team2: 'Team B' })
+  const [playingSquad, setPlayingSquad] = useState<string[]>([])
   const [team1Members, setTeam1Members] = useState<string[]>([])
   const [team2Members, setTeam2Members] = useState<string[]>([])
+  const [commonPlayer, setCommonPlayer] = useState<string | null>(null)
+  
   const [tossWinner, setTossWinner] = useState('')
   const [tossDecision, setTossDecision] = useState('Bat')
   const [battingFirst, setBattingFirst] = useState('')
   const [tossWasSimulated, setTossWasSimulated] = useState(false)
+  const [splitRoast, setSplitRoast] = useState<string | null>(null)
+  const [isSplitting, setIsSplitting] = useState(false)
+
+  const handleAutoSplit = async () => {
+    if (playingSquad.length < 2) return toast('Need at least 2 players in squad', 'error');
+    setIsSplitting(true);
+    try {
+      const usernames = playingSquad.map(id => members.find((m: any) => m.id === id)?.username).filter(Boolean);
+      const splitResult = await autoSplitCricketTeams(usernames);
+      
+      const t1Ids = splitResult.team1.map((un: string) => members.find((m: any) => m.username === un)?.id).filter(Boolean);
+      const t2Ids = splitResult.team2.map((un: string) => members.find((m: any) => m.username === un)?.id).filter(Boolean);
+      const commonId = splitResult.commonPlayer ? members.find((m: any) => m.username === splitResult.commonPlayer)?.id : null;
+      
+      setTeam1Members(t1Ids);
+      setTeam2Members(t2Ids);
+      setCommonPlayer(commonId);
+      setSplitRoast(splitResult.roast);
+      toast('AI Squad Split complete', 'success');
+    } catch (err: any) {
+      toast(err.message || 'AI Split Failed', 'error');
+    } finally {
+      setIsSplitting(false);
+    }
+  }
 
   const startMatch = () => {
     startTransition(async () => {
@@ -491,6 +577,9 @@ function RecordMatchForm({ games, members, onClose }: any) {
            ...team1Members.map(userId => ({ userId, teamName: cricketForm.team1 })),
            ...team2Members.map(userId => ({ userId, teamName: cricketForm.team2 }))
         ]
+        if (commonPlayer) {
+          participants.push({ userId: commonPlayer, teamName: 'Common' })
+        }
       }
       
       await logMatch({ 
@@ -516,6 +605,9 @@ function RecordMatchForm({ games, members, onClose }: any) {
     setTossWasSimulated(true);
   }
 
+  const availablePool = playingSquad.filter(id => !team1Members.includes(id) && !team2Members.includes(id) && id !== commonPlayer);
+  const unselectedMembers = members.filter((m: any) => !playingSquad.includes(m.id));
+
   return (
     <div className="rounded border border-primary/50 bg-card p-4 mb-4">
       <h3 className="font-mono text-sm font-bold text-primary">NEW_SESSION</h3>
@@ -525,6 +617,55 @@ function RecordMatchForm({ games, members, onClose }: any) {
 
       {game?.name === 'Cricket' && (
         <div className="mt-4 border border-secondary/50 rounded p-2 text-xs">
+          
+          <div className="mb-4 pb-4 border-b border-secondary/20">
+            <h4 className="font-bold text-secondary mb-2">1. SELECT PLAYING SQUAD</h4>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {playingSquad.map(id => {
+                const member = members.find((m: any) => m.id === id);
+                return (
+                  <span key={id} className="bg-secondary/20 text-secondary px-2 py-1 rounded-full flex items-center gap-1">
+                    @{member?.username}
+                    <button onClick={() => {
+                      setPlayingSquad(s => s.filter(x => x !== id));
+                      setTeam1Members(s => s.filter(x => x !== id));
+                      setTeam2Members(s => s.filter(x => x !== id));
+                      if (commonPlayer === id) setCommonPlayer(null);
+                    }} className="text-secondary hover:text-warning ml-1 text-[10px]">✕</button>
+                  </span>
+                )
+              })}
+            </div>
+            {unselectedMembers.length > 0 && (
+              <select 
+                value="" 
+                onChange={e => {
+                  if (e.target.value) setPlayingSquad([...playingSquad, e.target.value])
+                }} 
+                className="w-full bg-background border px-1 py-1"
+              >
+                <option value="">-- Add Player to Squad --</option>
+                {unselectedMembers.map((m: any) => <option key={m.id} value={m.id}>@{m.username}</option>)}
+              </select>
+            )}
+            
+            <div className="mt-3">
+              <button 
+                onClick={handleAutoSplit} 
+                disabled={isSplitting || playingSquad.length < 2} 
+                className="w-full bg-accent/20 border border-accent text-accent py-1 font-bold disabled:opacity-50"
+              >
+                {isSplitting ? 'AI IS THINKING...' : 'AI AUTO-SPLIT TEAMS (BASED ON ROLES)'}
+              </button>
+            </div>
+            
+            {splitRoast && (
+              <div className="mt-2 p-2 bg-background/50 border border-accent/30 text-accent italic text-[10px]">
+                🤖 AI Says: "{splitRoast}"
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-2 mb-4">
             <select value={cricketForm.format} onChange={e => setCricketForm(p => ({...p, format: e.target.value}))} className="bg-background border px-1 py-1">
               <option value="T20">T20</option>
@@ -533,39 +674,59 @@ function RecordMatchForm({ games, members, onClose }: any) {
             </select>
             <input type="number" placeholder="Max Overs" value={cricketForm.maxOvers} onChange={e => setCricketForm(p => ({...p, maxOvers: e.target.value}))} className="bg-background border px-1 py-1" />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <input placeholder="Team 1 Name" value={cricketForm.team1} onChange={e => setCricketForm(p => ({...p, team1: e.target.value}))} className="w-full bg-background border px-1 py-1 mb-2 font-bold text-accent" />
               {team1Members.map((memberId, idx) => (
                 <div key={idx} className="flex gap-1 mb-1">
-                  <select value={memberId} onChange={(e) => {
-                    const newMembers = [...team1Members];
-                    newMembers[idx] = e.target.value;
-                    setTeam1Members(newMembers);
-                  }} className="w-full bg-background border px-1 py-1">
-                    {members.map((m: any) => <option key={m.id} value={m.id}>@{m.username}</option>)}
-                  </select>
-                  <button onClick={() => setTeam1Members(team1Members.filter((_, i) => i !== idx))} className="text-secondary px-1">X</button>
+                  <span className="w-full bg-background border px-2 py-1 flex items-center justify-between">
+                    @{members.find((m: any) => m.id === memberId)?.username}
+                    <button onClick={() => setTeam1Members(team1Members.filter((_, i) => i !== idx))} className="text-secondary px-1">X</button>
+                  </span>
                 </div>
               ))}
-              <button onClick={() => setTeam1Members([...team1Members, members[0]?.id])} className="w-full text-left text-profit mt-1 text-[10px]">+ Add Player</button>
+              {availablePool.length > 0 && (
+                <select value="" onChange={e => { if (e.target.value) setTeam1Members([...team1Members, e.target.value]) }} className="w-full bg-background border px-1 py-1 text-muted-foreground mt-1">
+                  <option value="">+ Add to {cricketForm.team1}</option>
+                  {availablePool.map(id => <option key={id} value={id}>@{members.find((m: any) => m.id === id)?.username}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <input placeholder="Team 2 Name" value={cricketForm.team2} onChange={e => setCricketForm(p => ({...p, team2: e.target.value}))} className="w-full bg-background border px-1 py-1 mb-2 font-bold text-accent" />
               {team2Members.map((memberId, idx) => (
                 <div key={idx} className="flex gap-1 mb-1">
-                  <select value={memberId} onChange={(e) => {
-                    const newMembers = [...team2Members];
-                    newMembers[idx] = e.target.value;
-                    setTeam2Members(newMembers);
-                  }} className="w-full bg-background border px-1 py-1">
-                    {members.map((m: any) => <option key={m.id} value={m.id}>@{m.username}</option>)}
-                  </select>
-                  <button onClick={() => setTeam2Members(team2Members.filter((_, i) => i !== idx))} className="text-secondary px-1">X</button>
+                  <span className="w-full bg-background border px-2 py-1 flex items-center justify-between">
+                    @{members.find((m: any) => m.id === memberId)?.username}
+                    <button onClick={() => setTeam2Members(team2Members.filter((_, i) => i !== idx))} className="text-secondary px-1">X</button>
+                  </span>
                 </div>
               ))}
-              <button onClick={() => setTeam2Members([...team2Members, members[0]?.id])} className="w-full text-left text-profit mt-1 text-[10px]">+ Add Player</button>
+              {availablePool.length > 0 && (
+                <select value="" onChange={e => { if (e.target.value) setTeam2Members([...team2Members, e.target.value]) }} className="w-full bg-background border px-1 py-1 text-muted-foreground mt-1">
+                  <option value="">+ Add to {cricketForm.team2}</option>
+                  {availablePool.map(id => <option key={id} value={id}>@{members.find((m: any) => m.id === id)?.username}</option>)}
+                </select>
+              )}
             </div>
+          </div>
+          
+          <div className="mt-4 border-t border-secondary/20 pt-2">
+            <label className="block text-accent mb-1 font-bold text-[10px] uppercase">Common Player (Plays for both)</label>
+            {commonPlayer ? (
+              <div className="flex gap-1 items-center bg-accent/10 border border-accent/20 px-2 py-1 w-fit">
+                <span className="text-accent font-bold">@{members.find((m: any) => m.id === commonPlayer)?.username}</span>
+                <button onClick={() => setCommonPlayer(null)} className="text-secondary hover:text-warning ml-2">✕</button>
+              </div>
+            ) : (
+              availablePool.length > 0 && (
+                <select value="" onChange={e => { if (e.target.value) setCommonPlayer(e.target.value) }} className="w-full max-w-[200px] bg-background border px-1 py-1 text-muted-foreground">
+                  <option value="">+ Select Common Player</option>
+                  {availablePool.map(id => <option key={id} value={id}>@{members.find((m: any) => m.id === id)?.username}</option>)}
+                </select>
+              )
+            )}
           </div>
           
           <div className="grid grid-cols-2 gap-2 mt-4 border-t border-border/50 pt-2">

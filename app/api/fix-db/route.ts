@@ -27,6 +27,22 @@ export async function GET() {
       ALTER TABLE "polls" ADD COLUMN IF NOT EXISTS "is_pinned" boolean NOT NULL DEFAULT false;
     `)
     
+    // Match and users migration (cricket roles & vault)
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cricket_role') THEN
+          CREATE TYPE cricket_role AS ENUM ('batsman', 'bowler', 'batting_all_rounder', 'bowling_all_rounder', 'wicket_keeper');
+        END IF;
+      END$$;
+    `)
+    await db.execute(sql`
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cricket_role" cricket_role;
+    `)
+    await db.execute(sql`
+      ALTER TABLE "matches" ADD COLUMN IF NOT EXISTS "is_archived" boolean NOT NULL DEFAULT false;
+    `)
+    
     // Verify it works
     const count = await db.execute(sql`SELECT count(*) FROM "events"`)
     

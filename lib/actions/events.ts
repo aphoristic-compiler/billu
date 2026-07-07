@@ -269,6 +269,72 @@ export async function getEventsWithDetails() {
   return safeEvents as any
 }
 
+export async function getArchivedEventsWithDetails() {
+  const topLevel = await db.query.events.findMany({
+    where: and(isNull(events.parentEventId), eq(events.isArchived, true)),
+    orderBy: [desc(events.createdAt)],
+    with: {
+      creator: true,
+      rsvps: { with: { user: true } },
+      microEvents: {
+        with: { expenses: { with: { payer: true, splits: { with: { user: true } } } } }
+      },
+      expenses: {
+        with: { payer: true, splits: { with: { user: true } } }
+      },
+      polls: {
+        with: {
+          options: { with: { votes: { with: { user: true } } } },
+        },
+      },
+    },
+  })
+  
+  const safeEvents = topLevel.map((e) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    category: e.category,
+    location: e.location,
+    locationCustom: e.locationCustom,
+    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+    isLive: e.isLive,
+    isPinned: e.isPinned,
+    whatsappBlasted: e.whatsappBlasted,
+    createdBy: e.createdBy,
+    creator: e.creator ? { id: e.creator.id, username: e.creator.username, displayName: e.creator.displayName } : null,
+    rsvps: (e.rsvps || []).map((r) => ({
+      id: r.id,
+      status: r.status,
+      userId: r.userId,
+      user: r.user ? { id: r.user.id, username: r.user.username, displayName: r.user.displayName } : null
+    })),
+    microEvents: (e.microEvents || []).map((m) => ({
+      id: m.id,
+      title: m.title,
+      location: m.location,
+      locationCustom: m.locationCustom,
+      expenses: m.expenses || [],
+    })),
+    polls: (e.polls || []).map((p) => ({
+      id: p.id,
+      question: p.question,
+      options: (p.options || []).map((o) => ({
+        id: o.id,
+        label: o.label,
+        votes: (o.votes || []).map((v) => ({
+          id: v.id,
+          userId: v.userId,
+          user: v.user ? { id: v.user.id, username: v.user.username, displayName: v.user.displayName } : null
+        }))
+      }))
+    })),
+    expenses: e.expenses || [],
+  }))
+  
+  return safeEvents as any
+}
+
 export async function getTripDesk(eventId: string) {
   const [parentEvent, microEvents] = await Promise.all([
     db.query.events.findFirst({

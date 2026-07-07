@@ -36,6 +36,36 @@ export async function getStandalonePolls() {
   }))
 }
 
+export async function getArchivedStandalonePolls() {
+  const allPolls = await db.query.polls.findMany({
+    where: and(isNull(polls.eventId), eq(polls.isArchived, true)),
+    orderBy: [desc(polls.createdAt)],
+    with: {
+      creator: true,
+      options: {
+        orderBy: [pollOptions.sortOrder],
+        with: {
+          votes: {
+            with: { user: true },
+          },
+        },
+      },
+    },
+  })
+
+  return allPolls.map(p => ({
+    ...p,
+    creator: p.creator ? { id: p.creator.id, username: p.creator.username, displayName: p.creator.displayName } : null,
+    options: p.options.map(o => ({
+      ...o,
+      votes: o.votes.map(v => ({
+        ...v,
+        user: v.user ? { id: v.user.id, username: v.user.username, displayName: v.user.displayName } : null
+      }))
+    }))
+  }))
+}
+
 export async function createStandalonePoll(question: string, options: string[], isAnonymous: boolean = false) {
   const user = await requireDbUser()
   if (!question.trim()) throw new Error('Question required')

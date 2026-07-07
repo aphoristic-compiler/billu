@@ -5,6 +5,7 @@ import { desc, eq, inArray, and } from 'drizzle-orm'
 import { db, games, matches, matchParticipants, users, cricketMatches, cricketInnings, cricketBatterLogs, cricketBowlerLogs, badmintonSets, cardRounds, cardPlayerHands, pokerLedgers } from '@/lib/db'
 import { requireDbUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
+import { queryMistral } from '@/lib/mistral'
 
 export async function getGamesData() {
   const defaultGames = [
@@ -28,11 +29,12 @@ export async function getGamesData() {
 
   const [allMatches, members] = await Promise.all([
     db.query.matches.findMany({
+      where: eq(matches.isArchived, false),
       orderBy: [desc(matches.playedAt)],
       with: { 
         game: true, 
         participants: { with: { user: true } },
-        cricketMatches: { with: { innings: { with: { batterLogs: { with: { participant: true } }, bowlerLogs: { with: { participant: true } } } } } },
+        cricketMatches: { with: { innings: { with: { batterLogs: { with: { participant: { with: { user: true } } } }, bowlerLogs: { with: { participant: { with: { user: true } } } } } } } },
         badmintonSets: { with: { player1: true, player2: true, winner: true }, orderBy: [desc(badmintonSets.setNumber)] },
         cardRounds: { with: { hands: { with: { participant: true } } }, orderBy: [desc(cardRounds.roundNumber)] },
         pokerLedgers: { with: { participant: true } }
@@ -111,6 +113,30 @@ export async function deleteMatch(matchId: string) {
   await logActivity(user.id, 'match_deleted', `[LIQUIDATE] Match was deleted.`)
   revalidatePath('/hub')
   revalidatePath('/hub/games')
+}
+
+export async function archiveMatch(matchId: string) {
+  const user = await requireDbUser()
+  await db.update(matches).set({ isArchived: true }).where(eq(matches.id, matchId))
+  await logActivity(user.id, 'match_vaulted', `[VAULT] Match was vaulted into the archives.`)
+  revalidatePath('/hub')
+  revalidatePath('/hub/games')
+  revalidatePath('/hub/vault')
+}
+
+export async function getArchivedMatches() {
+  return await db.query.matches.findMany({
+    where: eq(matches.isArchived, true),
+    orderBy: [desc(matches.playedAt)],
+    with: { 
+      game: true, 
+      participants: { with: { user: true } },
+      cricketMatches: { with: { innings: { with: { batterLogs: { with: { participant: { with: { user: true } } } }, bowlerLogs: { with: { participant: { with: { user: true } } } } } } } },
+      badmintonSets: { with: { player1: true, player2: true, winner: true }, orderBy: [desc(badmintonSets.setNumber)] },
+      cardRounds: { with: { hands: { with: { participant: true } } }, orderBy: [desc(cardRounds.roundNumber)] },
+      pokerLedgers: { with: { participant: true } }
+    }
+  });
 }
 
 export async function completeOngoingMatch(matchId: string, manualWinnerIds?: string[]) {
@@ -321,3 +347,41 @@ export async function logPokerLedger(matchId: string, userId: string, chipsIn: n
     await db.insert(pokerLedgers).values({ matchId, matchParticipantId: mp.id, chipsIn, chipsOut })
   }
 }
+
+export async function autoSplitCricketTeams(usernames: string[]) {
+  if (usernames.length < 2) throw new Error("Need at least 2 players");
+  
+  try {
+    const prompt = `Split these players into two balanced cricket teams: ${usernames.join(', ')}.
+Analyze their roles if you know them. If odd number of players, assign one as commonPlayer.
+Return strictly JSON format: { "team1": ["u1"], "team2": ["u2"], "commonPlayer": "u3" | null, "roast": "a witty toxic roast about this selection" }`;
+    
+    const responseText = await queryMistral([
+      { role: 'system', content: 'You are a toxic AI cricket manager. Always return JSON.' },
+      { role: 'user', content: prompt }
+    ]);
+    
+    let cleaned = responseText.trim();
+    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+    if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+    
+    const parsed = JSON.parse(cleaned.trim());
+    return parsed;
+  } catch (err) {
+    const t1 = [], t2 = [];
+    let common = null;
+    const shuffled = [...usernames].sort(() => Math.random() - 0.5);
+    if (shuffled.length % 2 !== 0) {
+      common = shuffled.pop() || null;
+    }
+    const mid = Math.floor(shuffled.length / 2);
+    return {
+      team1: shuffled.slice(0, mid),
+      team2: shuffled.slice(mid),
+      commonPlayer: common,
+      roast: "Mistral AI choked on its own logic, so I just randomly shuffled you bozos."
+    };
+  }
+}
+ 

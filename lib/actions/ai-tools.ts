@@ -1,9 +1,10 @@
 import { db, events, expenses, debts, users, matchParticipants, matches, games, polls, pollOptions, pollVotes, systemLeaks, rsvps } from '@/lib/db'
 import { eq, or, ilike, and, desc, sql } from 'drizzle-orm'
 import { createEvent, updateEvent, addMicroEvent, deleteEvent, archiveEvent, toggleEventPin } from '@/lib/actions/events'
-import { logMatch } from '@/lib/actions/matches'
-import { addExpense } from '@/lib/actions/expenses'
+import { logMatch, autoSplitCricketTeams } from '@/lib/actions/matches'
+import { addExpense, getSimplifiedSettlements } from '@/lib/actions/expenses'
 import { createStandalonePoll, deletePoll, archivePoll, togglePollPin } from '@/lib/actions/polls'
+import { queryMistral } from '@/lib/mistral'
 import { requireDbUser } from '@/lib/auth'
 import { logSystemLeak } from '@/lib/activity'
 import { getAnalyticsData } from '@/lib/actions/analytics'
@@ -529,6 +530,140 @@ export const aiToolsConfig = [
       description: 'Fetch all active/ongoing matches currently being played (e.g. Cricket, Badminton, Cards, Poker). Use this to see what matches are currently live.',
       parameters: { type: 'object', properties: {} }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'change_cricket_role',
+      description: 'Changes the cricket role (e.g. batsman, bowler) of a user.',
+      parameters: {
+        type: 'object',
+        properties: {
+          username: { type: 'string', description: 'Username of the player.' },
+          role: { type: 'string', description: 'The role to set: batsman, bowler, batting_all_rounder, bowling_all_rounder, wicket_keeper' }
+        },
+        required: ['username', 'role']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'split_cricket_teams',
+      description: 'Auto-splits a list of usernames into balanced cricket teams using stats, roles and AI logic.',
+      parameters: {
+        type: 'object',
+        properties: {
+          usernames: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['usernames']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'start_cricket_match',
+      description: 'Starts a new ongoing cricket match with the provided squads and toss outcome.',
+      parameters: {
+        type: 'object',
+        properties: {
+          format: { type: 'string', enum: ['T20', 'ODI', 'Test'] },
+          maxOvers: { type: 'number' },
+          team1Name: { type: 'string' },
+          team2Name: { type: 'string' },
+          team1Players: { type: 'array', items: { type: 'string' } },
+          team2Players: { type: 'array', items: { type: 'string' } },
+          commonPlayer: { type: 'string', description: 'Optional common player username' },
+          tossWinner: { type: 'string', description: 'Name of team that won toss' },
+          battingFirst: { type: 'string', description: 'Name of team that bats first' }
+        },
+        required: ['format', 'maxOvers', 'team1Name', 'team2Name', 'team1Players', 'team2Players', 'tossWinner', 'battingFirst']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_debt_restructuring',
+      description: 'Analyzes the entire debt ledger and proposes a minimized debt graph to settle all debts efficiently.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'audit_expense_fraud',
+      description: 'Fetches recent expenses and runs an AI audit to identify who is leeching, not paying, or splitting unfairly.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_trip_itinerary',
+      description: 'Generates a full trip itinerary with micro-events based on a prompt, and creates them in the DB.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Vague user request, e.g. "Goa for 3 days"' }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'predict_flake_probability',
+      description: 'Analyzes a users RSVP history to predict how likely they are to bail on the next event.',
+      parameters: {
+        type: 'object',
+        properties: { username: { type: 'string' } },
+        required: ['username']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_live_commentary',
+      description: 'Fetches the current active matches and generates toxic sports commentary based on the logs.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'poker_fish_analysis',
+      description: 'Analyzes poker ledger history to identify the Shark and the Fish.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_wing_vibe',
+      description: 'Analyzes recent polls, RSVPs, and matches to calculate the wings current morale/vibe.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'issue_wing_fine',
+      description: 'Issues a financial fine against a user. The fine is owed to the user running the command.',
+      parameters: {
+        type: 'object',
+        properties: {
+          targetUsername: { type: 'string' },
+          reason: { type: 'string' },
+          amount: { type: 'number' },
+          issuerUsername: { type: 'string', description: 'The user executing the fine.' }
+        },
+        required: ['targetUsername', 'reason', 'amount', 'issuerUsername']
+      }
+    }
   }
 ];
 
@@ -557,6 +692,9 @@ export async function executeAiTool(name: string, args: any) {
       case 'add_microevent': return await ai_add_microevent(args);
       
         case 'log_cricket_stats': return await ai_log_cricket_stats(args);
+        case 'change_cricket_role': return await ai_change_cricket_role(args);
+        case 'split_cricket_teams': return await ai_split_cricket_teams(args);
+        case 'start_cricket_match': return await ai_start_cricket_match(args);
         case 'log_cards_round': return await ai_log_cards_round(args);
         case 'log_badminton_set': return await ai_log_badminton_set(args);
 
@@ -576,6 +714,15 @@ export async function executeAiTool(name: string, args: any) {
       case 'blast_event': return await ai_blast_event(args);
       case 'log_system_leak': return await ai_log_system_leak(args);
       
+      case 'propose_debt_restructuring': return await ai_propose_debt_restructuring();
+      case 'audit_expense_fraud': return await ai_audit_expense_fraud();
+      case 'generate_trip_itinerary': return await ai_generate_trip_itinerary(args);
+      case 'predict_flake_probability': return await ai_predict_flake_probability(args);
+      case 'generate_live_commentary': return await ai_generate_live_commentary();
+      case 'poker_fish_analysis': return await ai_poker_fish_analysis();
+      case 'analyze_wing_vibe': return await ai_analyze_wing_vibe();
+      case 'issue_wing_fine': return await ai_issue_wing_fine(args);
+
       default: return JSON.stringify({ error: `Tool ${name} not found.` });
     }
   } catch (err: any) {
@@ -1660,6 +1807,25 @@ async function ai_edit_expense(args: any) {
   }
 }
 
+async function ai_change_cricket_role(args: any) {
+  try {
+    const targetUser = await db.query.users.findFirst({
+      where: ilike(users.username, args.username)
+    });
+    if (!targetUser) return JSON.stringify({ error: `User @${args.username} not found.` });
+
+    const validRoles = ['batsman', 'bowler', 'batting_all_rounder', 'bowling_all_rounder', 'wicket_keeper'];
+    if (!validRoles.includes(args.role)) {
+      return JSON.stringify({ error: `Invalid role '${args.role}'. Valid roles are: ${validRoles.join(', ')}.` });
+    }
+
+    await db.update(users).set({ cricketRole: args.role as any }).where(eq(users.id, targetUser.id));
+    return JSON.stringify({ success: true, message: `Changed @${targetUser.username}'s cricket role to ${args.role}.` });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
 async function ai_get_poll_details(args: any) {
   try {
     const poll = await db.query.polls.findFirst({
@@ -1698,6 +1864,305 @@ async function ai_blast_event(args: any) {
     } else {
       return JSON.stringify({ error: `Event matching '${args.eventName}' not found.` });
     }
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_split_cricket_teams(args: any) {
+  try {
+    const splitResult = await autoSplitCricketTeams(args.usernames);
+    return JSON.stringify(splitResult);
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_start_cricket_match(args: any) {
+  try {
+    const cricketGame = await db.query.games.findFirst({ where: eq(games.name, 'Cricket') });
+    if (!cricketGame) return JSON.stringify({ error: "Cricket game not found" });
+
+    const participants = [];
+    
+    // Resolve user IDs
+    for (const uname of args.team1Players) {
+      const u = await db.query.users.findFirst({ where: ilike(users.username, uname) });
+      if (u) participants.push({ userId: u.id, teamName: args.team1Name });
+    }
+    for (const uname of args.team2Players) {
+      const u = await db.query.users.findFirst({ where: ilike(users.username, uname) });
+      if (u) participants.push({ userId: u.id, teamName: args.team2Name });
+    }
+    if (args.commonPlayer) {
+      const u = await db.query.users.findFirst({ where: ilike(users.username, args.commonPlayer) });
+      if (u) participants.push({ userId: u.id, teamName: 'Common' });
+    }
+
+    await logMatch({
+      gameId: cricketGame.id,
+      participants,
+      status: 'ongoing',
+      format: args.format,
+      maxOvers: args.maxOvers,
+      team1Name: args.team1Name,
+      team2Name: args.team2Name,
+      tossWinner: args.tossWinner,
+      battingFirst: args.battingFirst
+    });
+
+    return JSON.stringify({ success: true, message: `Started ${args.format} match between ${args.team1Name} and ${args.team2Name} with toss winner ${args.tossWinner} batting first: ${args.battingFirst}.` });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_propose_debt_restructuring() {
+  try {
+    const settlements = await getSimplifiedSettlements();
+    if (settlements.length === 0) return JSON.stringify({ message: "No pending debts to restructure!" });
+
+    const prompt = `Here is the simplified debt graph for the wing: ${JSON.stringify(settlements)}.
+Provide a highly toxic summary of who owes what to whom, and relentlessly mock the people who are holding the most debt (or basically who are dragging down the wing's economy). Return the summary as a string.`;
+
+    const roast = await queryMistral([
+      { role: 'system', content: 'You are a toxic AI debt collector and financial auditor for a friend group.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({
+      suggestedTransactions: settlements,
+      auditReport: roast
+    });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_audit_expense_fraud() {
+  try {
+    const recentExpenses = await db.query.expenses.findMany({
+      orderBy: [desc(expenses.createdAt)],
+      limit: 30,
+      with: { payer: true, splits: { with: { user: true } } }
+    });
+
+    const slimData = recentExpenses.map(e => ({
+      title: e.title,
+      total: e.totalAmount,
+      payer: e.payer?.username,
+      splits: e.splits.map(s => ({ user: s.user?.username, amount: s.amount }))
+    }));
+
+    const prompt = `Analyze these recent 30 expenses for our friend group: ${JSON.stringify(slimData)}.
+Identify patterns: Who always pays? Who is always leeching by getting splits but never paying the main bill? Are there any hilariously unequal splits?
+Generate a highly toxic financial audit report naming names and shaming the freeloaders. Return the report as plain text.`;
+
+    const report = await queryMistral([
+      { role: 'system', content: 'You are a toxic AI forensic accountant for a friend group.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({ auditReport: report });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_generate_trip_itinerary(args: any) {
+  try {
+    const prompt = `The user wants a trip/outing based on this description: "${args.prompt}".
+Generate a structured JSON itinerary containing a 'title' for the main trip, a 'location' for the main trip, and an array of 'microEvents', where each microEvent has a 'title' and 'location'.
+The locations must be vaguely matched to our categories if possible (e.g. 'other' or a custom string, but for 'location' we usually use 'other' and put the real location in 'locationCustom').
+Format: { "title": "Trip to Goa", "location": "other", "locationCustom": "Goa", "microEvents": [ { "title": "Beach party", "location": "other", "locationCustom": "Baga Beach" } ] }`;
+
+    const responseText = await queryMistral([
+      { role: 'system', content: 'You are a toxic AI party planner who makes unhinged but syntactically correct trip itineraries. Return STRICT JSON.' },
+      { role: 'user', content: prompt }
+    ]);
+    
+    let cleaned = responseText.trim();
+    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+    if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+    
+    const parsed = JSON.parse(cleaned.trim());
+
+    const createdEvent = await createEvent({
+      title: parsed.title,
+      category: 'trip',
+      location: 'other',
+      locationCustom: parsed.locationCustom || parsed.location || 'Unknown',
+      microEvents: parsed.microEvents || []
+    });
+
+    return JSON.stringify({ success: true, message: `Created trip '${parsed.title}' with ${parsed.microEvents?.length || 0} micro-events.`, eventId: createdEvent.id });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_predict_flake_probability(args: any) {
+  try {
+    const targetUser = await db.query.users.findFirst({ where: ilike(users.username, args.username) });
+    if (!targetUser) return JSON.stringify({ error: "User not found" });
+
+    const userRsvps = await db.query.rsvps.findMany({
+      where: eq(rsvps.userId, targetUser.id),
+      with: { event: true }
+    });
+
+    const slimRsvps = userRsvps.map((r: any) => ({
+      eventTitle: r.event?.title,
+      status: r.status
+    }));
+
+    const prompt = `Analyze this user's RSVP history: ${JSON.stringify(slimRsvps)}.
+Calculate their 'flake percentage' (how often they don't say 'going' or say 'not_going' to events).
+Generate a toxic roast predicting how likely they are to bail on the next event based on this data. Return plain text.`;
+
+    const roast = await queryMistral([
+      { role: 'system', content: 'You are a toxic AI behavioral analyst.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({ flakeAnalysis: roast });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_generate_live_commentary() {
+  try {
+    const ongoingMatches = await db.query.matches.findMany({
+      where: eq(matches.status, 'ongoing'),
+      with: {
+        game: true,
+        participants: { with: { user: true } },
+        cricketMatches: { with: { innings: { with: { batterLogs: { with: { participant: { with: { user: true } } } }, bowlerLogs: { with: { participant: { with: { user: true } } } } } } } },
+        badmintonSets: { with: { player1: true, player2: true } },
+        cardRounds: { with: { hands: { with: { participant: { with: { user: true } } } } } },
+        pokerLedgers: { with: { participant: { with: { user: true } } } }
+      }
+    });
+
+    if (ongoingMatches.length === 0) return JSON.stringify({ message: "No ongoing matches to commentate on." });
+
+    const matchData = ongoingMatches.map((m: any) => ({
+      game: m.game?.name,
+      participants: m.participants.map((p: any) => p.user?.username),
+      cricket: m.cricketMatches,
+      badminton: m.badmintonSets,
+      poker: m.pokerLedgers
+    }));
+
+    const prompt = `Here are the currently ongoing matches: ${JSON.stringify(matchData)}.
+Act as a highly toxic and biased sports commentator. Generate a live commentary update on how these matches are going, roasting whoever is losing or playing poorly. Return plain text.`;
+
+    const commentary = await queryMistral([
+      { role: 'system', content: 'You are a toxic sports commentator for a group of friends.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({ liveCommentary: commentary });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_poker_fish_analysis() {
+  try {
+    const allLedgers = await db.query.pokerLedgers.findMany({
+      with: { participant: { with: { user: true } } }
+    });
+
+    if (allLedgers.length === 0) return JSON.stringify({ message: "No poker history available." });
+
+    const userNets: Record<string, number> = {};
+    for (const l of allLedgers) {
+      const uname = l.participant?.user?.username;
+      if (!uname) continue;
+      const net = l.chipsOut - l.chipsIn;
+      userNets[uname] = (userNets[uname] || 0) + net;
+    }
+
+    const prompt = `Here is the total net chips (chipsOut - chipsIn) for all players in poker history: ${JSON.stringify(userNets)}.
+Identify the "Shark" (highest net) and the absolute "Fish" (lowest net). Generate a toxic poker analysis roasting the fish and giving seating advice on who to sit next to. Return plain text.`;
+
+    const analysis = await queryMistral([
+      { role: 'system', content: 'You are a toxic poker pro analyzing a friend group.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({ analysis });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_analyze_wing_vibe() {
+  try {
+    const recentPolls = await db.query.polls.findMany({
+      orderBy: [desc(polls.createdAt)],
+      limit: 5,
+      with: { options: { with: { votes: true } } }
+    });
+
+    const recentEvents = await db.query.events.findMany({
+      orderBy: [desc(events.createdAt)],
+      limit: 5,
+      with: { rsvps: true }
+    });
+
+    const data = {
+      polls: recentPolls.map(p => ({ question: p.question, totalVotes: p.options.reduce((acc: number, o: any) => acc + o.votes.length, 0) })),
+      events: recentEvents.map(e => ({ title: e.title, going: e.rsvps.filter((r: any) => r.status === 'going').length }))
+    };
+
+    const prompt = `Here is recent data for our friend group: ${JSON.stringify(data)}.
+Act as a toxic group psychologist. Tell us what the current "vibe" or morale of the wing is. Are people hyped for events or just rotting away? Return plain text.`;
+
+    const vibe = await queryMistral([
+      { role: 'system', content: 'You are a toxic psychologist for a friend group.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({ wingVibe: vibe });
+  } catch (err: any) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function ai_issue_wing_fine(args: any) {
+  try {
+    const targetUser = await db.query.users.findFirst({ where: ilike(users.username, args.targetUsername) });
+    const issuerUser = await db.query.users.findFirst({ where: ilike(users.username, args.issuerUsername) });
+    
+    if (!targetUser) return JSON.stringify({ error: `User @${args.targetUsername} not found.` });
+    if (!issuerUser) return JSON.stringify({ error: `User @${args.issuerUsername} not found. (The person issuing the fine must exist).` });
+    if (targetUser.id === issuerUser.id) return JSON.stringify({ error: "You cannot fine yourself." });
+
+    const title = `🚨 WING FINE: ${args.reason}`;
+    
+    await addExpense({
+      title,
+      totalAmount: args.amount,
+      paidBy: issuerUser.id,
+      tag: 'fine',
+      splits: [
+        { userId: targetUser.id, amount: args.amount }
+      ]
+    });
+
+    const prompt = `The user @${issuerUser.username} just issued a wing fine of ₹${args.amount} against @${targetUser.username} for "${args.reason}".
+Act as an unhinged digital Judge. Issue a toxic "Court Ruling" validating this fine and roasting the defendant. Return plain text.`;
+
+    const ruling = await queryMistral([
+      { role: 'system', content: 'You are an unhinged AI Judge for a friend group.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    return JSON.stringify({ success: true, message: `Fine issued! @${targetUser.username} now owes @${issuerUser.username} ₹${args.amount}.`, courtRuling: ruling });
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
