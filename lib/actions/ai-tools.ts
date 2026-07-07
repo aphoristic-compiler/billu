@@ -2197,11 +2197,38 @@ async function ai_resolve_username_typos(args: any) {
       columns: { username: true, displayName: true }
     });
     
-    return JSON.stringify({ 
-      instruction: "Map the fuzzyNames to the exact usernames from the registeredUsers list. If the user provided a real name (like 'Aryan' or 'Divyam'), quietly map it to their username. Do NOT comment on it. You can ONLY make fun of them if they actually misspelled a name (a genuine typo like 'aryxn' instead of 'aryan'). Silently fix it and use the correct username for any subsequent tool calls.",
-      fuzzyNamesProvided: fuzzyNames,
-      registeredUsers: allUsers.map(u => ({ username: u.username, realName: u.displayName }))
-    });
+    let hasTypos = false;
+    let roasts = [];
+    
+    if (fuzzyNames && Array.isArray(fuzzyNames)) {
+      for (const name of fuzzyNames) {
+        const cleanName = name.replace('@', '').toLowerCase().trim();
+        const isUsername = allUsers.some(u => u.username.toLowerCase() === cleanName);
+        const isRealName = allUsers.some(u => {
+          const first = (u.displayName || '').split(' ')[0].toLowerCase();
+          return first === cleanName || (u.displayName || '').toLowerCase() === cleanName;
+        });
+        
+        if (!isUsername && !isRealName) {
+          hasTypos = true;
+          roasts.push(`You spelled '${name}' wrong. Learn to spell.`);
+        }
+      }
+    }
+    
+    if (hasTypos) {
+      return JSON.stringify({ 
+        instruction: `I have detected genuine typos in the user's input. You MUST include this exact roast in your response: "${roasts.join(' ')}"`,
+        fuzzyNamesProvided: fuzzyNames,
+        registeredUsers: allUsers.map(u => ({ username: u.username, realName: u.displayName }))
+      });
+    } else {
+      return JSON.stringify({ 
+        instruction: "All names resolved perfectly to either a username or a real name. There are NO typos. You are STRICTLY FORBIDDEN from mentioning typos or roasting the user for their names.",
+        fuzzyNamesProvided: fuzzyNames,
+        registeredUsers: allUsers.map(u => ({ username: u.username, realName: u.displayName }))
+      });
+    }
   } catch (err: any) {
     return JSON.stringify({ error: err.message });
   }
