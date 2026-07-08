@@ -646,6 +646,23 @@ export const aiToolsConfig = [
   {
     type: 'function',
     function: {
+      name: 'log_system_leak',
+      description: 'Adds a new lore entry or system leak about a specific member to the database.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'A catchy title for the lore.' },
+          body: { type: 'string', description: 'The actual story or lore.' },
+          memberName: { type: 'string', description: 'The name or username of the wing member this lore is about.' },
+          rarity: { type: 'string', enum: ['common', 'rare', 'epic', 'legendary'], description: 'How legendary this lore is.' }
+        },
+        required: ['title', 'body', 'memberName', 'rarity']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'predict_flake_probability',
       description: 'Analyzes a users RSVP history to predict how likely they are to bail on the next event.',
       parameters: {
@@ -1847,7 +1864,9 @@ async function ai_log_system_leak(args: any) {
   try {
     await logSystemLeak({
       memberName: args.memberName,
-      body: args.body
+      body: args.body,
+      title: args.title,
+      rarity: args.rarity
     });
     return JSON.stringify({ success: true, message: `Leak logged for ${args.memberName}.` });
   } catch (err: any) {

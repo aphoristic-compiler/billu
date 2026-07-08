@@ -17,14 +17,14 @@ export async function logActivity(
   }
 }
 
-export async function logSystemLeak(params: { memberName?: string; body: string }) {
+export async function logSystemLeak(params: { memberName?: string; body: string; title?: string; rarity?: string }) {
   try {
     await db.insert(systemLeaks).values({
       category: 'misc',
-      title: 'AI Intercepted Intel',
+      title: params.title || 'AI Intercepted Intel',
       memberName: params.memberName || null,
       body: params.body,
-      rarity: 'uncommon',
+      rarity: params.rarity || 'uncommon',
     })
   } catch (e) {
     console.error('[v0] Failed to write system leak:', e)
