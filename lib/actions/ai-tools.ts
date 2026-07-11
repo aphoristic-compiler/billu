@@ -490,6 +490,8 @@ export const aiToolsConfig = [
           runsScored: { type: 'number', description: 'Runs scored in this over/instance.' },
           wicketsFallen: { type: 'number', description: 'Wickets taken.' },
           ballsFaced: { type: 'number', description: 'Number of balls faced by the batter.' },
+          wides: { type: 'number', description: 'Number of wides bowled.' },
+          noBalls: { type: 'number', description: 'Number of no-balls bowled.' },
           inningNumber: { type: 'number', description: '1 or 2.' }
         },
         required: ['battingPlayer', 'bowlingPlayer', 'runsScored', 'wicketsFallen', 'inningNumber']
@@ -841,7 +843,7 @@ async function get_user_financials(username: string) {
 
 async function query_game_tracker() {
   const allParticipations = await db.query.matchParticipants.findMany({ with: { match: { with: { game: true } }, user: true } });
-  const stats: Record<string, Record<string, { wins: number, losses: number }>> = {};
+  const stats: Record<string, Record<string, any>> = {};
   allParticipations.forEach((p: any) => {
     const gameName = p.match?.game?.name || 'Unknown';
     const username = p.user?.username;
@@ -851,6 +853,17 @@ async function query_game_tracker() {
     if (p.isWinner) stats[gameName][username].wins++;
     else stats[gameName][username].losses++;
   });
+
+  if (stats['Cricket']) {
+    const allUsers = await db.query.users.findMany();
+    const cricketStats = await getCricketStatsForPlayers(allUsers.map(u => u.id));
+    for (const u of allUsers) {
+      if (stats['Cricket'][u.username] && cricketStats[u.id]) {
+        stats['Cricket'][u.username].detailedStats = cricketStats[u.id];
+      }
+    }
+  }
+
   return JSON.stringify(stats);
 }
 
@@ -1196,6 +1209,8 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
         const aSr = parseFloat(s.allTime.sr) || 0;
         const aWkts = s.allTime.wickets || 0;
         const aEcon = parseFloat(s.allTime.econ) || 0;
+        const rExtras = (s.recent.wides || 0) + (s.recent.noBalls || 0);
+        const aExtras = (s.allTime.wides || 0) + (s.allTime.noBalls || 0);
 
         // Weight recent form more (60%) than all-time form (40%)
         const avgAvg = (rAvg * 0.6) + (aAvg * 0.4);
@@ -1207,7 +1222,8 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
         const batRating = avgAvg + (avgSr / 2);
         
         // Bowling rating: Wickets * 10 + (Econ > 0 ? (120 / Econ) : 0)
-        const bowlRating = (wktMetric * 10) + (econMetric > 0 ? (120 / econMetric) : 0);
+        const extrasPenalty = ((rExtras * 0.6) + (aExtras * 0.4)) * 2;
+        const bowlRating = Math.max(0, (wktMetric * 10) + (econMetric > 0 ? (120 / econMetric) : 0) - extrasPenalty);
 
         totalSkill += batRating + bowlRating;
       });
@@ -1230,7 +1246,7 @@ async function simulate_match_odds(player1: string, player2: string, gameName: s
       t1Odds = Math.max(5, Math.min(95, t1Odds));
       t2Odds = 100 - t1Odds;
 
-      cricketStatsVerdict = `Cricket Stats Adjusted: T1 Skill ${Math.round(t1Skill)} vs T2 Skill ${Math.round(t2Skill)} based on batting & bowling records.`;
+      cricketStatsVerdict = `Cricket Stats Adjusted: T1 Skill ${Math.round(t1Skill)} vs T2 Skill ${Math.round(t2Skill)} based on batting & bowling records. High extras (wides/no-balls) severely penalize bowler skill ratings.`;
     }
   }
 
@@ -1618,7 +1634,7 @@ async function ai_log_cricket_stats(args: any) {
     }
 
     await logCricketBatter(cricketMatch.id, args.inningNumber, batter.id, args.runsScored, args.ballsFaced || 0, false);
-    await logCricketOver(cricketMatch.id, args.inningNumber, bowler.id, args.runsScored, args.wicketsFallen);
+    await logCricketOver(cricketMatch.id, args.inningNumber, bowler.id, args.runsScored, args.wicketsFallen, args.wides || 0, args.noBalls || 0);
 
     const lore = await getLoreRoastsForUsers([batter.username, bowler.username]);
     return JSON.stringify({ message: `Logged ${args.runsScored} runs for ${batter.displayName}, and ${args.wicketsFallen} wickets for ${bowler.displayName}. ${lore}` });

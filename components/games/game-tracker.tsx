@@ -298,7 +298,7 @@ function LogRoundForm({ match, members, onClose }: any) {
   const [inningNumber, setInningNumber] = useState(1)
   
   // Cricket Over
-  const [cricketOver, setCricketOver] = useState({ bowler: '', runs: '', wickets: '' })
+  const [cricketOver, setCricketOver] = useState({ bowler: '', runs: '', wickets: '', wides: '', noBalls: '' })
   
   // Cricket Batter
   const [cricketBatter, setCricketBatter] = useState({ batter: '', runs: '', balls: '', isOut: false })
@@ -361,9 +361,9 @@ function LogRoundForm({ match, members, onClose }: any) {
   const submitOver = () => {
     startTransition(async () => {
       if (!cricketOver.bowler) return toast('Select bowler', 'error')
-      await logCricketOver(match.id, inningNumber, cricketOver.bowler, Number(cricketOver.runs), Number(cricketOver.wickets))
+      await logCricketOver(match.id, inningNumber, cricketOver.bowler, Number(cricketOver.runs), Number(cricketOver.wickets), Number(cricketOver.wides || 0), Number(cricketOver.noBalls || 0))
       toast('Over logged', 'success')
-      setCricketOver({ bowler: '', runs: '', wickets: '' })
+      setCricketOver({ bowler: '', runs: '', wickets: '', wides: '', noBalls: '' })
       router.refresh()
     })
   }
@@ -441,8 +441,10 @@ function LogRoundForm({ match, members, onClose }: any) {
                   ))
                 )}
               </select>
-              <input type="number" placeholder="Runs Conceded" value={cricketOver.runs} onChange={e => setCricketOver(p => ({...p, runs: e.target.value}))} className="bg-background border px-1" />
-              <input type="number" placeholder="Wickets Taken" value={cricketOver.wickets} onChange={e => setCricketOver(p => ({...p, wickets: e.target.value}))} className="bg-background border px-1" />
+              <input type="number" placeholder="Runs" value={cricketOver.runs} onChange={e => setCricketOver(p => ({...p, runs: e.target.value}))} className="bg-background border px-1 w-16" />
+              <input type="number" placeholder="Wkts" value={cricketOver.wickets} onChange={e => setCricketOver(p => ({...p, wickets: e.target.value}))} className="bg-background border px-1 w-16" />
+              <input type="number" placeholder="Wd" value={cricketOver.wides} onChange={e => setCricketOver(p => ({...p, wides: e.target.value}))} className="bg-background border px-1 w-16" />
+              <input type="number" placeholder="NB" value={cricketOver.noBalls} onChange={e => setCricketOver(p => ({...p, noBalls: e.target.value}))} className="bg-background border px-1 w-16" />
             </div>
             <button onClick={submitOver} disabled={pending} className="mt-2 bg-secondary text-background px-2 rounded w-full">LOG OVER</button>
           </div>

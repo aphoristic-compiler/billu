@@ -251,7 +251,7 @@ async function getOrCreateParticipant(matchId: string, userId: string) {
   return mp
 }
 
-export async function logCricketOver(matchId: string, inningNumber: number, bowlerId: string, runsConceded: number, wicketsTaken: number) {
+export async function logCricketOver(matchId: string, inningNumber: number, bowlerId: string, runsConceded: number, wicketsTaken: number, wides: number = 0, noBalls: number = 0) {
   // Finds or creates inning
   const [cm] = await db.select().from(cricketMatches).where(eq(cricketMatches.matchId, matchId))
   let [inning] = await db.select().from(cricketInnings).where(and(eq(cricketInnings.cricketMatchId, cm.id), eq(cricketInnings.inningNumber, inningNumber)))
@@ -270,7 +270,7 @@ export async function logCricketOver(matchId: string, inningNumber: number, bowl
   
   let [bowlerLog] = await db.select().from(cricketBowlerLogs).where(and(eq(cricketBowlerLogs.inningId, inning.id), eq(cricketBowlerLogs.matchParticipantId, bowlerMp.id)))
   if (!bowlerLog) {
-    [bowlerLog] = await db.insert(cricketBowlerLogs).values({ inningId: inning.id, matchParticipantId: bowlerMp.id, overs: 1, runsConceded, wickets: wicketsTaken }).returning()
+    [bowlerLog] = await db.insert(cricketBowlerLogs).values({ inningId: inning.id, matchParticipantId: bowlerMp.id, overs: 1, runsConceded, wickets: wicketsTaken, wides, noBalls }).returning()
   } else {
     // Add overs nicely. e.g. 1.5 + 0.1 = 2.0 (simplification: assume they just bowl full overs for now or just add decimal)
     const currentOvers = Math.floor(bowlerLog.overs)
@@ -280,7 +280,9 @@ export async function logCricketOver(matchId: string, inningNumber: number, bowl
     await db.update(cricketBowlerLogs).set({
       overs: newOvers,
       runsConceded: bowlerLog.runsConceded + runsConceded,
-      wickets: bowlerLog.wickets + wicketsTaken
+      wickets: bowlerLog.wickets + wicketsTaken,
+      wides: (bowlerLog.wides || 0) + wides,
+      noBalls: (bowlerLog.noBalls || 0) + noBalls
     }).where(eq(cricketBowlerLogs.id, bowlerLog.id))
   }
 
@@ -395,6 +397,8 @@ export async function getCricketStatsForPlayers(userIds: string[]) {
     let allTimeRunsGiven = 0;
     let allTimeOvers = 0;
     let allTimeOuts = 0;
+    let allTimeWides = 0;
+    let allTimeNoBalls = 0;
 
     let recentRuns = 0;
     let recentBalls = 0;
@@ -402,6 +406,8 @@ export async function getCricketStatsForPlayers(userIds: string[]) {
     let recentRunsGiven = 0;
     let recentOvers = 0;
     let recentOuts = 0;
+    let recentWides = 0;
+    let recentNoBalls = 0;
 
     const RECENT_LIMIT = 10;
     let matchCount = 0;
@@ -423,12 +429,16 @@ export async function getCricketStatsForPlayers(userIds: string[]) {
 
       for (const b of p.cricketBowlerLogs) {
         allTimeWickets += b.wickets || 0;
-        allTimeRunsGiven += b.runsGiven || 0;
+        allTimeRunsGiven += (b as any).runsConceded || b.runsGiven || 0;
         allTimeOvers += b.overs || 0;
+        allTimeWides += b.wides || 0;
+        allTimeNoBalls += b.noBalls || 0;
         if (isRecent) {
           recentWickets += b.wickets || 0;
-          recentRunsGiven += b.runsGiven || 0;
+          recentRunsGiven += (b as any).runsConceded || b.runsGiven || 0;
           recentOvers += b.overs || 0;
+          recentWides += b.wides || 0;
+          recentNoBalls += b.noBalls || 0;
         }
       }
     }
@@ -446,6 +456,8 @@ export async function getCricketStatsForPlayers(userIds: string[]) {
         sr: calcSR(allTimeRuns, allTimeBalls).toFixed(1),
         wickets: allTimeWickets,
         econ: calcEcon(allTimeRunsGiven, allTimeOvers).toFixed(1),
+        wides: allTimeWides,
+        noBalls: allTimeNoBalls
       },
       recent: {
         matches: Math.min(parts.length, RECENT_LIMIT),
@@ -453,6 +465,8 @@ export async function getCricketStatsForPlayers(userIds: string[]) {
         sr: calcSR(recentRuns, recentBalls).toFixed(1),
         wickets: recentWickets,
         econ: calcEcon(recentRunsGiven, recentOvers).toFixed(1),
+        wides: recentWides,
+        noBalls: recentNoBalls
       }
     };
   }
@@ -475,7 +489,7 @@ export async function autoSplitCricketTeams(usernames: string[]) {
     const playersWithStats = players.map(p => {
       const stats = statsMap[p.id];
       if (!stats) return `${p.username} (${p.cricketRole || 'Unknown'} - No history)`;
-      return `${p.username} (${stats.role}) | Recent(last 10): Avg ${stats.recent.avg}, SR ${stats.recent.sr}, Wkts ${stats.recent.wickets}, Econ ${stats.recent.econ} | All-time: Avg ${stats.allTime.avg}, SR ${stats.allTime.sr}, Wkts ${stats.allTime.wickets}, Econ ${stats.allTime.econ}`;
+      return `${p.username} (${stats.role}) | Recent(last 10): Avg ${stats.recent.avg}, SR ${stats.recent.sr}, Wkts ${stats.recent.wickets}, Econ ${stats.recent.econ}, Wides ${stats.recent.wides}, NB ${stats.recent.noBalls} | All-time: Avg ${stats.allTime.avg}, SR ${stats.allTime.sr}, Wkts ${stats.allTime.wickets}, Econ ${stats.allTime.econ}, Wides ${stats.allTime.wides}, NB ${stats.allTime.noBalls}`;
     }).join('\n');
 
     const prompt = `Split these players into two balanced cricket teams based on their historical stats and roles:\n${playersWithStats}\n
@@ -487,7 +501,7 @@ Return strictly JSON format: { "team1": ["u1"], "team2": ["u2"], "commonPlayer":
     const responseText = await queryMistral([
       { role: 'system', content: 'You are a toxic AI cricket manager and data analyst. Always return JSON.' },
       { role: 'user', content: prompt }
-    ]);
+    ], 'system');
     
     let cleaned = responseText.trim();
     if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);

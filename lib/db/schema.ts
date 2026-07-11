@@ -245,6 +245,8 @@ export const cricketBowlerLogs = pgTable("cricket_bowler_logs", {
   overs: real("overs").notNull().default(0),
   runsConceded: integer("runs_conceded").notNull().default(0),
   wickets: integer("wickets").notNull().default(0),
+  wides: integer("wides").notNull().default(0),
+  noBalls: integer("no_balls").notNull().default(0),
 })
 
 export const badmintonSets = pgTable("badminton_sets", {
